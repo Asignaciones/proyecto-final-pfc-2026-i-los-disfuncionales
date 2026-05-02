@@ -16,6 +16,8 @@
 | Nicolas Cardona García         | 2477349 | nicolas.cardona.garcia@correounivalle.edu.co |
 | Samuel Estaban Peña Jaramillo  | 2477399 | samuel.pena@correounivalle.edu.co            |
 | Laura Sofía Echeverry Gonzaléz | 2477067 | echeverry.laura@correounivalle.edu.co        |
+
+
 **Obligatorio:** editar esta tabla con los datos reales de todos los integrantes.
 Si un integrante no aparece aquí, su nota individual será 0.0.
 
