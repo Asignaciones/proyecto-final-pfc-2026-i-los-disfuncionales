@@ -63,17 +63,34 @@ object AsignacionAulas {
   // ---------------------------------------------------------------------------
 
   /** Devuelve true sii los intervalos [ini1, fin1) y [ini2, fin2) se traslapan. */
-  def solapan(c1: Curso, c2: Curso): Boolean = ???
+  def solapan(c1: Curso, c2: Curso): Boolean =
+    iniCurso(c1) < finCurso(c2) && iniCurso(c2) < finCurso(c1)
 
   /**
    * Número de pares (i, j) con i < j tales que a(i) == a(j) >= 0
    * y los cursos i y j se solapan.
    */
-  def choques(cursos: Cursos, a: Asignacion): Int = ???
+  def choques(cursos: Cursos, a: Asignacion): Int =
+    cursos.indices.toVector  // genera Vector(0, 1, 2, ..., n-1)
+      .flatMap { idx =>       // para cada índice, genera una lista de sus choques con los siguientes
+        cursos.indices
+          .drop(idx + 1)      // solo miramos hacia adelante para no repetir pares
+          .filter { jdx =>    // filtramos solo los que cumplen las 3 condiciones del PDF
+            a(idx) >= 0 &&
+              a(idx) == a(jdx) &&
+              solapan(cursos(idx), cursos(jdx))
+          }
+      }
+      .length                 // contamos cuántos pares chocaron en total
 
   /** Cantidad de cursos cuya aula asignada tiene capacidad menor al número de estudiantes. */
-  def capacidadFallida(cursos: Cursos, aulas: Aulas, a: Asignacion): Int = ???
-
+    // Revisar mas tarde
+  def capacidadFallida(cursos: Cursos, aulas: Aulas, a: Asignacion): Int =
+    cursos.indices          // genera los índices 0..n-1
+      .count { i =>         // cuenta directamente los que cumplan la condición
+        a(i) >= 0 &&        // el curso está asignado a algún aula
+          capAula(aulas(a(i))) < estCurso(cursos(i))  // el aula no alcanza para los estudiantes
+      }
   /**
    * Suma de (cap(aula_i) - est(curso_i)) para los cursos asignados
    * con capacidad suficiente.
