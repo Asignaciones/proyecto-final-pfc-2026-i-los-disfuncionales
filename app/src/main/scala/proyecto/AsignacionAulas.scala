@@ -61,7 +61,7 @@ object AsignacionAulas {
   // ---------------------------------------------------------------------------
   // Funciones a implementar
   // ---------------------------------------------------------------------------
-
+    //Samuel
   /** Devuelve true sii los intervalos [ini1, fin1) y [ini2, fin2) se traslapan. */
   def solapan(c1: Curso, c2: Curso): Boolean =
     iniCurso(c1) < finCurso(c2) && iniCurso(c2) < finCurso(c1)
@@ -70,21 +70,21 @@ object AsignacionAulas {
    * Número de pares (i, j) con i < j tales que a(i) == a(j) >= 0
    * y los cursos i y j se solapan.
    */
-  def choques(cursos: Cursos, a: Asignacion): Int =
-    cursos.indices.toVector  // genera Vector(0, 1, 2, ..., n-1)
-      .flatMap { idx =>       // para cada índice, genera una lista de sus choques con los siguientes
-        cursos.indices
-          .drop(idx + 1)      // solo miramos hacia adelante para no repetir pares
-          .filter { jdx =>    // filtramos solo los que cumplen las 3 condiciones del PDF
-            a(idx) >= 0 &&
-              a(idx) == a(jdx) &&
-              solapan(cursos(idx), cursos(jdx))
-          }
+    //Samuel
+  def choques(cursos: Cursos, a: Asignacion): Int = {
+    cursos.indices.map { i =>
+      // Para cada curso i contamos los choques con los cursos posteriores
+      cursos.indices.drop(i + 1).count { j =>
+        // Hay choque si ambos cursos están en la misma aula,
+        // el aula es válida y los horarios se traslapan
+        a(i) >= 0 &&
+          a(i) == a(j) &&
+          solapan(cursos(i), cursos(j))
       }
-      .length                 // contamos cuántos pares chocaron en total
-
+    }.sum // Sumamos todos los choques encontrados
+  }
+    //Samuel
   /** Cantidad de cursos cuya aula asignada tiene capacidad menor al número de estudiantes. */
-    // Revisar mas tarde
   def capacidadFallida(cursos: Cursos, aulas: Aulas, a: Asignacion): Int =
     cursos.indices          // genera los índices 0..n-1
       .count { i =>         // cuenta directamente los que cumplan la condición
@@ -95,19 +95,44 @@ object AsignacionAulas {
    * Suma de (cap(aula_i) - est(curso_i)) para los cursos asignados
    * con capacidad suficiente.
    */
-  def desperdicio(cursos: Cursos, aulas: Aulas, a: Asignacion): Int = ???
+    //Santiago
+  def desperdicio(cursos: Cursos, aulas: Aulas, a: Asignacion): Int =
+    cursos.indices.map { i =>
+      // Si el curso tiene un aula asignada, calculamos cuánto espacio sobra
+      if (a(i) >= 0) {
+        val dif = capAula(aulas(a(i))) - estCurso(cursos(i))
+        math.max(dif, 0) // Si la diferencia es negativa, aporta 0 al desperdicio
+      } else 0 // Los cursos sin asignar no generan desperdicio
+    }.sum // Sumamos el desperdicio de todos los cursos
 
   /**
    * Ordena los cursos asignados por hora de inicio y suma las distancias
    * entre aulas de cursos consecutivos.
    */
+    //Santiago
+    // sortBy: Ordena los elementos de una colección según el criterio que se le indique.
+    // sliding(2): Crea ventanas consecutivas de tamaño 2 sobre una colección.
   def movilidad(cursos: Cursos, aulas: Aulas, d: Distancias,
-                a: Asignacion): Int = ???
+                a: Asignacion): Int =
+    cursos.indices
+      .filter(i => a(i) >= 0) // Tomamos únicamente los cursos que tienen aula asignada
+      .sortBy(i => iniCurso(cursos(i))) // Los ordenamos por hora de inicio
+      .sliding(2) // Formamos pares de cursos consecutivos
+      .map { par =>
+        d(a(par(0)))(a(par(1))) // Distancia entre las aulas de cada par consecutivo
+      }.sum // Sumamos todas las distancias recorridas
 
+  //Santiago
   /** Costo total: w_CH * CH + w_CF * CF + w_DE * DE + w_MV * MV. */
   def costoAsignacion(cursos: Cursos, aulas: Aulas, d: Distancias,
-                      a: Asignacion, w: Pesos): Int = ???
-
+                      a: Asignacion, w: Pesos): Int = {
+    // Guardamos cada peso en una variable para usar la fórmula más fácilmente
+    val (wCH, wCF, wDE, wMV) = w
+      wCH * choques(cursos, a) + // Penalización por choques de horario
+      wCF * capacidadFallida(cursos, aulas, a) + // Penalización por aulas con capacidad insuficiente
+      wDE * desperdicio(cursos, aulas, a) + // Espacios desaprovechados en las aulas
+      wMV * movilidad(cursos, aulas, d, a) // Distancia recorrida entre aulas
+  }
   /**
    * Genera todas las asignaciones completas posibles: vectores en {0,..,m-1}^n.
    * El tamaño del resultado es m^n.
