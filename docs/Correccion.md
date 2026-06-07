@@ -298,3 +298,423 @@ Esta igualdad matemática es idéntica a la regla de asignación del acumulador 
 
 ## **Conclusión de la demostración:** 
 Al cumplirse la base y el paso inductivo, el invariante es válido para cualquier transición. Cuando el combinador alcanza el estado final $s_f$ (donde $i = n$), se asegura que el valor de la variable de retorno $ac$ corresponde exactamente con la cardinalidad de todas las asignaciones defectuosas del dominio. El programa es formalmente correcto.
+
+---
+
+#### 2.5 Función desperdicio
+
+```scala
+/**
+ * Suma de (cap(aula_i) - est(curso_i)) para los cursos asignados
+ * con capacidad suficiente.
+ */
+def desperdicio(cursos: Cursos, aulas: Aulas, a: Asignacion): Int =
+  cursos.indices.map { i =>
+    if (a(i) >= 0) {
+      val dif = capAula(aulas(a(i))) - estCurso(cursos(i))
+      math.max(dif, 0)
+    } else 0
+  }.sum
+```
+
+La función calcula el desperdicio total de capacidad generado por una asignación de aulas. Para cada curso asignado se determina cuántos puestos quedan libres en el aula correspondiente y únicamente se acumulan diferencias positivas.
+
+Sea la especificación matemática:
+
+$$
+DE(cursos,aulas,a)=
+\sum_{i=0}^{n-1}
+\max\left(
+cap(aulas(a(i)))-
+est(cursos(i)),
+0
+\right)
+\quad \text{si } a(i)\ge0
+$$
+
+donde:
+
+* $cap(aulas(a(i)))$ representa la capacidad del aula asignada.
+* $est(cursos(i))$ representa la cantidad de estudiantes del curso.
+* $\max(x,0)$ garantiza que únicamente se contabilicen desperdicios positivos.
+
+##### Modelado de Estados para desperdicio
+
+* **Estado $s$:** Tupla $(i,n,ac)$ donde:
+
+  * $i$ es el índice actual procesado.
+  * $n$ es el número total de cursos.
+  * $ac$ es el desperdicio acumulado hasta el momento.
+
+* **Estado inicial $s_0$:**
+
+$$
+(0,n,0)
+$$
+
+* **Estado final $s_f$:**
+
+$$
+i=n
+$$
+
+* **Transformación de estados:**
+
+$$
+(i,n,ac)
+\rightarrow
+(i+1,n,ac+\text{desp}(i))
+$$
+
+donde:
+
+$$
+\text{desp}(i)=
+\begin{cases}
+\max(cap(aulas(a(i)))-est(cursos(i)),0)
+&
+\text{si } a(i)\ge0
+\
+0
+&
+\text{en otro caso}
+\end{cases}
+$$
+
+##### Invariante de la iteración
+
+$$
+Inv(i,n,ac)
+\equiv
+0\le i\le n
+\land
+ac=
+\sum_{k=0}^{i-1}
+\text{desp}(k)
+$$
+
+Es decir, en cualquier instante de la ejecución, el acumulador contiene exactamente la suma de los desperdicios de todos los cursos procesados hasta el índice $i-1$.
+
+##### Demostración por Inducción sobre la Iteración
+
+**1. Caso base**
+
+Evaluamos el invariante en el estado inicial:
+
+$$
+s_0=(0,n,0)
+$$
+
+Sustituyendo en el invariante:
+
+$$
+Inv(0,n,0)
+\equiv
+0\le0\le n
+\land
+0=
+\sum_{k=0}^{-1}
+\text{desp}(k)
+$$
+
+La suma sobre un conjunto vacío es igual a $0$, por lo tanto el invariante se cumple en el estado inicial.
+
+---
+
+**2. Paso inductivo**
+
+Supongamos que el invariante se cumple para un estado arbitrario:
+
+$$
+(i,n,ac)
+$$
+
+con:
+
+$$
+ac=
+\sum_{k=0}^{i-1}
+\text{desp}(k)
+$$
+
+Aplicando la transformación de estados obtenemos:
+
+$$ac' = ac + desp(i)$$
+
+Sustituyendo la hipótesis inductiva:
+
+$$ac' = \sum_{k=0}^{i-1} desp(k) + desp(i)$$
+
+que equivale a:
+
+$$ac' = \sum_{k=0}^{i} desp(k)$$
+
+Por lo tanto el invariante también se mantiene para el estado siguiente:
+
+$$(i+1,n,ac')$$
+
+---
+
+### Conclusión de la demostración
+
+Se verificó que:
+
+1. El invariante es verdadero en el estado inicial.
+2. El invariante se preserva en cada transición de estado.
+
+Por el principio de inducción sobre la iteración, cuando la función alcanza el estado final $i=n$, el acumulador contiene exactamente:
+
+$$
+\sum_{i=0}^{n-1}
+\text{desp}(i)
+$$
+
+que coincide con la especificación matemática del desperdicio total.
+
+Por lo tanto:
+
+$$P_{DE}(cursos,aulas,a) = DE(cursos,aulas,a)$$
+
+y la función `desperdicio` es formalmente correcta.
+
+---
+
+#### 2.6 Función movilidad
+
+```scala
+/**
+ * Ordena los cursos asignados por hora de inicio y suma las distancias
+ * entre aulas de cursos consecutivos.
+ */
+def movilidad(cursos: Cursos, aulas: Aulas, d: Distancias,
+              a: Asignacion): Int =
+  cursos.indices
+    .filter(i => a(i) >= 0)
+    .sortBy(i => iniCurso(cursos(i)))
+    .sliding(2)
+    .map { par =>
+      d(a(par(0)))(a(par(1)))
+    }.sum
+```
+
+La función calcula el costo total de movilidad entre aulas. Para ello considera únicamente los cursos asignados, los ordena cronológicamente y suma las distancias entre las aulas de cada par consecutivo de cursos.
+
+Sea $c_0,c_1,\dots,c_{m-1}$ la secuencia de cursos asignados obtenida después de aplicar el filtrado de cursos válidos y el ordenamiento cronológico realizado por la función.
+
+Sea la especificación matemática:
+
+$$MV(cursos,a,d)=\sum_{k=0}^{m-2} d(a(c_k),a(c_{k+1}))$$
+
+donde:
+
+* $c_0,c_1,\dots,c_{m-1}$ representan los cursos asignados ordenados por hora de inicio.
+* $d(x,y)$ corresponde a la distancia entre las aulas $x$ e $y$.
+
+##### Modelado de Estados para movilidad
+
+* **Estado $s$:** Tupla $(i,m,ac)$ donde:
+
+  * $i$ representa el número de pares consecutivos ya procesados.
+  * $m$ corresponde al número de cursos asignados.
+  * $ac$ almacena la movilidad acumulada.
+
+* **Estado inicial $s_0$:**
+
+$$(0,m,0)$$
+
+* **Estado final $s_f$:**
+
+$$i=m-1$$
+
+* **Transformación de estados:**
+
+$$(i,m,ac)\rightarrow(i+1,m,ac+dist(i))$$
+
+donde:
+
+$$dist(i)=d(a(c_i),a(c_{i+1}))$$
+
+##### Invariante de la iteración
+
+$$Inv(i,m,ac)\equiv 0\le i\le m-1 \land ac=\sum_{k=0}^{i-1} dist(k)$$
+
+Es decir, en cualquier instante del procesamiento, el acumulador contiene exactamente la suma de las distancias correspondientes a todos los pares consecutivos ya evaluados.
+
+##### Demostración por Inducción sobre la Iteración
+
+**1. Caso base**
+
+Evaluamos el invariante en el estado inicial:
+
+$$s_0=(0,m,0)$$
+
+Sustituyendo en el invariante:
+
+$$Inv(0,m,0)\equiv 0\le0\le m-1 \land 0=\sum_{k=0}^{-1} dist(k)$$
+
+La suma sobre un conjunto vacío es igual a $0$, por lo que el invariante se cumple en el estado inicial.
+
+---
+
+**2. Paso inductivo**
+
+Supongamos que el invariante se cumple para un estado arbitrario:
+
+$$(i,m,ac)$$
+
+con:
+
+$$ac=\sum_{k=0}^{i-1} dist(k)$$
+
+Aplicando la transformación de estados obtenemos:
+
+$$ac'=ac+dist(i)$$
+
+Sustituyendo la hipótesis inductiva:
+
+$$ac'=\sum_{k=0}^{i-1} dist(k)+dist(i)$$
+
+que equivale a:
+
+$$ac'=\sum_{k=0}^{i} dist(k)$$
+
+Por lo tanto el invariante también se mantiene para el estado siguiente:
+
+$$(i+1,m,ac')$$
+
+---
+
+### Conclusión de la demostración
+
+Se verificó que:
+
+1. El invariante es verdadero en el estado inicial.
+2. El invariante se preserva en cada transición de estado.
+
+Por el principio de inducción sobre la iteración, cuando la función alcanza el estado final, el acumulador contiene exactamente:
+
+$$\sum_{k=0}^{m-2} dist(k)$$
+
+que coincide con la especificación matemática de la movilidad total.
+
+Por lo tanto:
+
+$$P_{MV}(cursos,a,d)=MV(cursos,a,d)$$
+
+y la función `movilidad` es formalmente correcta.
+
+---
+
+#### 2.7 Función costoAsignacion
+
+```scala
+/** Costo total: w_CH * CH + w_CF * CF + w_DE * DE + w_MV * MV. */
+def costoAsignacion(cursos: Cursos, aulas: Aulas, d: Distancias,
+                    a: Asignacion, w: Pesos): Int = {
+
+  // Guardamos cada peso en una variable para usar la fórmula más fácilmente
+  val (wCH, wCF, wDE, wMV) = w
+
+  wCH * choques(cursos, a) +
+  wCF * capacidadFallida(cursos, aulas, a) +
+  wDE * desperdicio(cursos, aulas, a) +
+  wMV * movilidad(cursos, aulas, d, a)
+}
+```
+
+La función calcula el costo total de una asignación de aulas mediante una combinación lineal ponderada de las métricas definidas previamente.
+
+Sea la especificación matemática:
+
+$$CT=w_{CH}\cdot CH+w_{CF}\cdot CF+w_{DE}\cdot DE+w_{MV}\cdot MV$$
+
+donde:
+
+* $CH$ representa el número de choques de horario.
+* $CF$ representa la cantidad de fallos de capacidad.
+* $DE$ representa el desperdicio total de capacidad.
+* $MV$ representa el costo total de movilidad.
+
+##### Modelo de evaluación para costoAsignacion
+
+La función no realiza iteraciones explícitas ni transformaciones sucesivas de una colección.
+
+Su evaluación puede modelarse mediante el estado:
+
+$$s=(CH,CF,DE,MV,CT)$$
+
+donde:
+
+* $CH$ corresponde al resultado de `choques`.
+* $CF$ corresponde al resultado de `capacidadFallida`.
+* $DE$ corresponde al resultado de `desperdicio`.
+* $MV$ corresponde al resultado de `movilidad`.
+* $CT$ corresponde al costo total calculado.
+
+##### Estado inicial
+
+El estado inicial se obtiene después de evaluar las cuatro métricas:
+
+$$s_0=(CH,CF,DE,MV,0)$$
+
+##### Estado final
+
+El estado final corresponde al cálculo completo del costo:
+
+$$s_f=(CH,CF,DE,MV,CT)$$
+
+donde:
+
+$$CT=w_{CH}CH+w_{CF}CF+w_{DE}DE+w_{MV}MV$$
+
+##### Invariante
+
+$$Inv(CH,CF,DE,MV,CT)\equiv CT=w_{CH}CH+w_{CF}CF+w_{DE}DE+w_{MV}MV$$
+
+Es decir, el valor almacenado en $CT$ debe coincidir exactamente con la combinación ponderada de las métricas calculadas previamente.
+
+##### Demostración de Corrección
+
+Las funciones:
+
+$$choques(cursos,a)$$
+
+$$capacidadFallida(cursos,aulas,a)$$
+
+$$desperdicio(cursos,aulas,a)$$
+
+$$movilidad(cursos,aulas,d,a)$$
+
+ya fueron demostradas correctas respecto a sus respectivas especificaciones.
+
+Por lo tanto:
+
+$$P_{CH}=CH$$
+
+$$P_{CF}=CF$$
+
+$$P_{DE}=DE$$
+
+$$P_{MV}=MV$$
+
+Sustituyendo estos resultados en la implementación de `costoAsignacion`:
+
+$$CT=w_{CH}\cdot P_{CH}+w_{CF}\cdot P_{CF}+w_{DE}\cdot P_{DE}+w_{MV}\cdot P_{MV}$$
+
+Aplicando la corrección de cada una de las funciones auxiliares:
+
+$$CT=w_{CH}\cdot CH+w_{CF}\cdot CF+w_{DE}\cdot DE+w_{MV}\cdot MV$$
+
+que coincide exactamente con la especificación matemática definida para el costo total.
+
+---
+
+### Conclusión de la demostración
+
+Dado que cada métrica utilizada por la función es correcta respecto a su especificación y la implementación aplica exactamente la fórmula matemática definida en el problema, se concluye que:
+
+$$P_{CT}(cursos,aulas,d,a,w)=CT(cursos,aulas,d,a,w)$$
+
+Por lo tanto, la función `costoAsignacion` es formalmente correcta.
+
+---

@@ -140,6 +140,137 @@ class AsignacionAulasTest extends AnyFunSuite {
     assert(desperdicio(c1, a1, Vector(0, 1, 0)) == 25)
   }
 
+  // test propios de desperdicio
+
+  test("desperdicio: capacidad exacta genera desperdicio 0") {
+    val cursoExacto = Vector(("M99", 4, 8, 30))
+
+    // E101 tiene capacidad 30
+    assert(desperdicio(cursoExacto, a1, Vector(0)) == 0)
+  }
+
+  test("desperdicio: cursos sin asignar no generan desperdicio") {
+    // Al no tener aula asignada (-1), el curso no participa en el cálculo.
+    val curso = Vector(("M99", 4, 8, 20))
+
+    assert(desperdicio(curso, a1, Vector(-1)) == 0)
+  }
+
+
+  test("desperdicio: acumula correctamente desperdicios de varios cursos") {
+
+    val cursos = Vector(
+      ("C1", 4, 8, 20),
+      ("C2", 8, 12, 10)
+    )
+
+    // E101 = 30
+    // E102 = 40
+
+    // Desperdicio:
+    // 30 - 20 = 10
+    // 40 - 10 = 30
+    // Total = 40
+
+    assert(desperdicio(cursos, a1, Vector(0, 1)) == 40)
+  }
+
+  test("desperdicio: aula con capacidad insuficiente aporta 0 al desperdicio") {
+
+    val cursoGrande = Vector(("C1", 4, 8, 50))
+
+    // E101 tiene capacidad 30.
+    // 30 - 50 = -20
+    // math.max(-20, 0) = 0
+
+    assert(desperdicio(cursoGrande, a1, Vector(0)) == 0)
+  }
+
+  test("desperdicio: todos los cursos en la misma aula acumulan desperdicio individual") {
+
+    val cursos = Vector(
+      ("C1", 4, 8, 25),
+      ("C2", 8, 12, 20),
+      ("C3", 12, 16, 15)
+    )
+
+    // Aula E101 (30):
+    // 30 - 25 = 5
+    // 30 - 20 = 10
+    // 30 - 15 = 15
+    // Total = 30
+
+    assert(desperdicio(cursos, a1, Vector(0, 0, 0)) == 30)
+  }
+
+  // test propios de movilidad
+  test("movilidad: todos los cursos en la misma aula generan movilidad 0") {
+    // Todas las transiciones ocurren dentro de E101.
+    // d1(0)(0) = 0, por lo que no existe desplazamiento.
+
+    assert(movilidad(c1, a1, d1, Vector(0, 0, 0)) == 0)
+  }
+
+  test("movilidad: asignacion [0,1,0] tiene movilidad 6") {
+    // Orden cronológico:
+    // M01 -> M02 -> M03
+    //
+    // E101 -> E102 = 3
+    // E102 -> E101 = 3
+    //
+    // Total = 6
+
+    assert(movilidad(c1, a1, d1, Vector(0, 1, 0)) == 6)
+  }
+
+  test("movilidad: un único curso asignado genera movilidad 0") {
+
+    val cursoUnico = Vector(
+      ("M99", 4, 8, 20)
+    )
+
+    // No existen pares consecutivos.
+    // sliding(2) no genera distancias.
+
+    assert(movilidad(cursoUnico, a1, d1, Vector(0)) == 0)
+  }
+
+  test("movilidad: cursos sin asignar son ignorados") {
+
+    // Solo M01 y M03 quedan asignados.
+    //
+    // M01 -> E101
+    // M03 -> E102
+    //
+    // Distancia = 3
+
+    assert(movilidad(c1, a1, d1, Vector(0, -1, 1)) == 3)
+  }
+
+  test("movilidad: respeta el orden cronologico y no el orden del vector") {
+
+    val cursosDesordenados = Vector(
+      ("C1", 12, 16, 20),
+      ("C2", 4, 8, 20),
+      ("C3", 8, 12, 20)
+    )
+
+    // Ordenados por hora:
+    // C2 -> C3 -> C1
+    //
+    // Asignación:
+    // C1 -> E102
+    // C2 -> E102
+    // C3 -> E101
+    //
+    // E102 -> E101 = 3
+    // E101 -> E102 = 3
+    //
+    // Total = 6
+
+    assert(movilidad(cursosDesordenados, a1, d1, Vector(1, 1, 0)) == 6)
+  }
+
   // costoAsignacion
   test("costoAsignacion: asignacion [0,0,1] cuesta 1031") {
     assert(costoAsignacion(c1, a1, d1, Vector(0, 0, 1), w) == 1031)
@@ -148,6 +279,80 @@ class AsignacionAulasTest extends AnyFunSuite {
   test("costoAsignacion: asignacion [0,1,0] cuesta 37") {
     assert(costoAsignacion(c1, a1, d1, Vector(0, 1, 0), w) == 37)
   }
+
+  // test propios de costoAsignacion
+  test("costoAsignacion: todos los cursos en E101 cuesta 1015") {
+
+    // CH = 1
+    // CF = 0
+    // DE = 15
+    // MV = 0
+    //
+    // 1000*1 + 100*0 + 15 + 0 = 1015
+
+    assert(costoAsignacion(c1, a1, d1, Vector(0, 0, 0), w) == 1015)
+  }
+
+  test("costoAsignacion: todos los cursos en E102 cuesta 1030") {
+
+    // CH = 1
+    // CF = 0
+    // DE = 45
+    // MV = 0
+    //
+    // 1000 + 45 = 1045
+
+    assert(costoAsignacion(c1, a1, d1, Vector(1, 1, 1), w) == 1045)
+  }
+
+  test("costoAsignacion: cursos sin asignar reducen el costo") {
+
+    // [0,-1,1]
+    //
+    // CH = 0
+    // CF = 0
+    // DE = 25
+    // MV = 3
+    //
+    // 0 + 0 + 25 + 6 = 31
+
+    assert(costoAsignacion(c1, a1, d1, Vector(0, -1, 1), w) == 31)
+  }
+
+  test("costoAsignacion: aula insuficiente incrementa el costo en 100") {
+
+    val cursos = Vector(
+      ("M99", 4, 8, 50)
+    )
+
+    // CH = 0
+    // CF = 1
+    // DE = 0
+    // MV = 0
+    //
+    // 100
+
+    assert(costoAsignacion(cursos, a1, d1, Vector(0), w) == 100)
+  }
+
+  test("costoAsignacion: un curso único solo considera desperdicio") {
+
+    val curso = Vector(
+      ("M01", 4, 8, 25)
+    )
+
+    // Aula E101:
+    //
+    // CH = 0
+    // CF = 0
+    // DE = 5
+    // MV = 0
+    //
+    // Resultado = 5
+
+    assert(costoAsignacion(curso, a1, d1, Vector(0), w) == 5)
+  }
+
 
   // generarAsignaciones
   test("generarAsignaciones: 2 cursos y 2 aulas produce 4 asignaciones") {

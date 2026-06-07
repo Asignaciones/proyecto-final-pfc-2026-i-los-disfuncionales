@@ -61,6 +61,7 @@ object AsignacionAulas {
   // ---------------------------------------------------------------------------
   // Funciones a implementar
   // ---------------------------------------------------------------------------
+
     //Samuel
   /** Devuelve true sii los intervalos [ini1, fin1) y [ini2, fin2) se traslapan. */
   def solapan(c1: Curso, c2: Curso): Boolean =
@@ -109,18 +110,21 @@ object AsignacionAulas {
    * Ordena los cursos asignados por hora de inicio y suma las distancias
    * entre aulas de cursos consecutivos.
    */
-    //Santiago
-    // sortBy: Ordena los elementos de una colección según el criterio que se le indique.
-    // sliding(2): Crea ventanas consecutivas de tamaño 2 sobre una colección.
+
+  // Santiago
+  // sortBy: Ordena los elementos de una colección según el criterio indicado.
+  // sliding(2): Crea ventanas consecutivas de tamaño 2 sobre una colección.
   def movilidad(cursos: Cursos, aulas: Aulas, d: Distancias,
                 a: Asignacion): Int =
     cursos.indices
       .filter(i => a(i) >= 0) // Tomamos únicamente los cursos que tienen aula asignada
       .sortBy(i => iniCurso(cursos(i))) // Los ordenamos por hora de inicio
       .sliding(2) // Formamos pares de cursos consecutivos
-      .map { par =>
-        d(a(par(0)))(a(par(1))) // Distancia entre las aulas de cada par consecutivo
-      }.sum // Sumamos todas las distancias recorridas
+      .collect {
+        case Seq(i, j) =>
+          d(a(i))(a(j)) // Distancia entre las aulas de cada par consecutivo
+      }
+      .sum // Sumamos todas las distancias recorridas
 
   //Santiago
   /** Costo total: w_CH * CH + w_CF * CF + w_DE * DE + w_MV * MV. */
@@ -137,7 +141,7 @@ object AsignacionAulas {
    * Genera todas las asignaciones completas posibles: vectores en {0,..,m-1}^n.
    * El tamaño del resultado es m^n.
    */
-
+  // Soku
   def generarAsignaciones(n: Int, m: Int): Vector[Asignacion] = {
     if (n == 0) {
       // una sola asignación vacía
@@ -154,6 +158,7 @@ object AsignacionAulas {
     }
   }
 
+  // Soku
   def asignacionOptima(cursos: Cursos, aulas: Aulas, d: Distancias, w: Pesos): (Asignacion, Int) = {
 
     val n = cursos.length
