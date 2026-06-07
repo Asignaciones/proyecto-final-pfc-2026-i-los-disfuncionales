@@ -189,3 +189,112 @@ Por inducción, al llegar al estado final, \$max = f(L)\$.
 $$
 P_f(L) == f(L)
 $$
+---
+
+# Informe de corrección
+
+## Puntos 2.3, 2.4 y 2.5
+
+## Argumentación de corrección de programas
+
+### Argumentando sobre corrección de programas recursivos
+
+#### 1. Función `solapan`
+
+```scala
+/** Devuelve true si los intervalos [ini1, fin1) y [ini2, fin2) se traslapan. */
+def solapan(c1: Curso, c2: Curso): Boolean =
+iniCurso(c1) < finCurso(c2) && iniCurso(c2) < finCurso(c1)
+```
+Para demostrar la corrección del predicado temporal de orden constante, aplicamos lógica proposicional directa sobre sus restricciones de dominio.
+
+Sea la especificación matemática del traslape entre dos intervalos de tiempo abiertos por la derecha:
+
+$$\forall c_1, c_2 \in Cursos : f_{solapan}(c_1, c_2) \equiv (ini_1 < fin_2 \land ini_2 < fin_1)$$
+
+Dado que la función en Scala no genera bifurcaciones complejas, ciclos ni llamadas recursivas, su corrección estructural es inmediata por identidad lógica con la especificación. Al evaluar las condiciones simultáneamente, devuelve verdadero si y solo si los intervalos intersecan en la línea de tiempo, garantizando transparencia referencial absoluta.
+
+---
+
+### Argumentando sobre corrección de programas iterativos
+
+Para evaluar funciones basadas en transformaciones y filtrado de colecciones indexadas, modelamos el comportamiento de los combinadores de alto orden de Scala (`.map`, `.count`, `.sum`) como programas iterativos genéricos basados en transiciones de estados estructurados.
+
+#### 2. Función choques
+
+```scala
+/**
+   * Número de pares (i, j) con i < j tales que a(i) == a(j) >= 0
+   * y los cursos i y j se solapan.
+   */
+  def choques(cursos: Cursos, a: Asignacion): Int = {
+    cursos.indices.map { i =>
+      // Para cada curso i contamos los choques con los cursos posteriores
+      cursos.indices.drop(i + 1).count { j =>
+        // Hay choque si ambos cursos están en la misma aula,
+        // el aula es válida y los horarios se traslapan
+        a(i) >= 0 &&
+          a(i) == a(j) &&
+          solapan(cursos(i), cursos(j))
+      }
+    }.sum // Sumamos todos los choques encontrados
+  }
+```
+La función realiza un cálculo combinatorio sobre los pares de índices $(i, j)$ tales que $i < j$. Podemos descomponer su comportamiento en dos estados iterativos acoplados: un bucle externo controlado por el índice $i$ y un bucle interno perezoso provocado por el método `.drop(i + 1).count`.
+
+##### Modelado de Estados del Procesamiento:
+- **Estado Externo:** Cuyo progreso se define por la terna $(i, n, ac_{total})$, donde $ac_{total}$ acumula los choques de todos los elementos previos evaluados.
+- **Estado Inicial Externo:** $s_0 = (0, n, 0)$.
+- **Estado Final Externo:** Cuando $i = n$.
+- **Invariante Externo:** $$\text{Inv}_{ext}(i, n, ac_{total}) \equiv ac_{total} = \sum_{k=0}^{i-1} \text{cuenta\_parcial}(k)$$
+
+##### Demostración analítica:
+- **Base:** Cuando $i = 0$, la suma no contiene términos, por lo que $ac_{total} = 0$, satisfaciendo el estado inicial.
+- **Paso inductivo:** Al pasar de $i$ a $i+1$, el método `.map` invoca la sub-evaluación interna sobre el rango restante recortado por `.drop(i + 1)`. Esto garantiza que el índice $j$ siempre sea estrictamente mayor que $i$ ($i < j$), cumpliendo la restricción matemática del problema. El conteo parcial generado se añade asociativamente a través de `.sum`. Cuando $i = n$, la reducción final entrega la suma total exacta de colisiones sin duplicaciones.
+
+---
+
+#### 3. Función capacidadFallida
+
+```scala
+/** Cantidad de cursos cuya aula asignada tiene capacidad menor al número de estudiantes. */
+  def capacidadFallida(cursos: Cursos, aulas: Aulas, a: Asignacion): Int =
+    cursos.indices          // genera los índices 0..n-1
+      .count { i =>         // cuenta directamente los que cumplan la condición
+        a(i) >= 0 &&        // el curso está asignado a algún aula
+          capAula(aulas(a(i))) < estCurso(cursos(i))  // el aula no alcanza para los estudiantes
+      }
+```
+##### Modelado de Estados para capacidadFallida:
+- **Estado $s$:** Terna de la forma $(i, n, ac)$, donde $i$ es el índice del curso actual bajo evaluación, $n$ es la cantidad total de cursos, y $ac$ es el acumulador entero con la cuenta de violaciones de capacidad detectadas.
+- **Estado inicial $s_0$:** $(0, n, 0)$.
+- **Estado final $s_f$:** Condición de parada cuando $i = n$.
+- **Transformación de estados:**
+  $$(i, n, ac) \to (i + 1, n, ac + \text{evaluar}(i))$$
+  Donde el predicado de evaluación se define como:
+  $$\text{evaluar}(i) = \begin{cases} 1 & \text{si } a(i) \ge 0 \land cap(aula(a(i))) < est(curso(i)) \\ 0 & \text{en caso contrario} \end{cases}$$
+
+##### Invariante de la iteración:
+$$\text{Inv}(i, n, ac) \equiv 0 \le i \le n \land ac = |\{k \in \mathbb{N} \mid 0 \le k < i \land a(k) \ge 0 \land cap(aula(a(k))) < est(curso(k))\}|$$
+
+##### Demostración por Inducción sobre la Iteración:
+
+**1. Base Inicial:** Evaluamos el invariante en el estado inicial $s_0 = (0, n, 0)$:
+$$\text{Inv}(0, n, 0) \equiv 0 \le 0 \le n \land 0 = |\{k \in \mathbb{N} \mid 0 \le k < 0 \dots \}|$$
+El rango $0 \le k < 0$ representa un conjunto vacío. El cardinal de un conjunto vacío es rigurosamente $0$. Por lo tanto, $\text{Inv}(s_0)$ es verdadero.
+
+**2. Paso Inductivo:** Asumimos como hipótesis de inducción que el invariante se cumple para un estado intermedio $s = (i, n, ac)$ con $i < n$. Demostraremos que al aplicar la transformación hacia el estado siguiente $s' = (i + 1, n, ac')$, el invariante $\text{Inv}(s')$ sigue siendo válido.
+
+Por definición de la transformación del acumulador:
+$$ac' = |\{k \in \mathbb{N} \mid 0 \le k < i + 1 \land \text{condición}(k)\}|$$
+
+Separamos el conjunto de índices en la unión disjunta del rango ya procesado ($0 \le k < i$) y el nuevo elemento aislado ($k = i$):
+$$ac' = |\{k \in \mathbb{N} \mid 0 \le k < i \land \text{condición}(k)\}| + |\{k = i \mid \text{condición}(i)\}|$$
+
+Sustituyendo por nuestra hipótesis de inducción y por la función matemática de evaluación:
+$$ac' = ac + \text{evaluar}(i)$$
+
+Esta igualdad matemática es idéntica a la regla de asignación del acumulador interno que gestiona el método de alto orden `.count` en Scala.
+
+## **Conclusión de la demostración:** 
+Al cumplirse la base y el paso inductivo, el invariante es válido para cualquier transición. Cuando el combinador alcanza el estado final $s_f$ (donde $i = n$), se asegura que el valor de la variable de retorno $ac$ corresponde exactamente con la cardinalidad de todas las asignaciones defectuosas del dominio. El programa es formalmente correcto.
