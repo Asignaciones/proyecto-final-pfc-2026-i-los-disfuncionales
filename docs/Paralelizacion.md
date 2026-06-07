@@ -1,6 +1,13 @@
 # Informe de paralelización
 
-**Integrantes:** [completar]
+## Integrantes del grupo
+
+| Nombre completo | Código | Correo institucional |
+|----------------|---------|----------------------|
+| Santiago Serrano Morales | 2477006 | serrano.santiago@correounivalle.edu.co |
+| Nicolas Cardona Garcia | 2477349 | nicolas.cardona.garcia@correounivalle.edu.co |
+| Samuel Estaban Peña Jaramillo | 2477399 | samuel.pena@correounivalle.edu.co |
+| Laura Sofía Echeverry González | 2477067 | echeverry.laura@correounivalle.edu.co |
 
 ---
 
@@ -61,6 +68,105 @@ Explique aquí:
 
 ---
 # Informe de paralelización
+
+## Estrategia de paralelización
+
+La estrategia general utilizada en este proyecto consiste en aplicar paralelismo por división de dominio. Cada problema se divide en dos subconjuntos independientes que pueden procesarse simultáneamente utilizando la función `parallel` proporcionada por la infraestructura del curso. Una vez obtenidos los resultados parciales, estos se combinan para producir el resultado final equivalente a la versión secuencial.
+
+### `choquesPar`
+
+La función divide el conjunto de índices de cursos en dos mitades. Cada tarea calcula de forma independiente los choques correspondientes a su rango de índices mediante la misma lógica utilizada en la versión secuencial. Posteriormente, los resultados parciales se combinan mediante una suma.
+
+Esta estrategia es válida porque el número total de choques corresponde a la suma de los choques detectados en cada subconjunto de índices.
+
+### `desperdicioPar`
+
+La paralelización se realiza dividiendo el conjunto de cursos en dos grupos. Cada tarea calcula el desperdicio generado por los cursos de su rango, acumulando las diferencias positivas entre la capacidad del aula y el número de estudiantes.
+
+Una vez finalizados ambos cálculos, los desperdicios parciales se suman para obtener el desperdicio total. La independencia de los cursos permite realizar este cálculo sin interferencias entre tareas.
+
+### `movilidadPar`
+
+La función divide los cursos en dos mitades y calcula simultáneamente la movilidad asociada a cada subconjunto. En cada tarea se realiza el filtrado de cursos asignados, el ordenamiento por hora de inicio y el cálculo de las distancias entre aulas consecutivas.
+
+Finalmente, las contribuciones parciales se suman para producir el valor de movilidad total.
+
+### `generarAsignacionesPar`
+
+La estrategia utilizada sigue directamente la recomendación del enunciado. Primero se generan secuencialmente todas las asignaciones correspondientes a los $n-1$ cursos restantes.
+
+Posteriormente, los posibles valores del primer curso se dividen en dos grupos. Cada grupo construye en paralelo las asignaciones completas agregando su valor correspondiente al inicio de cada asignación parcial previamente generada.
+
+Los resultados de ambas tareas se combinan mediante la concatenación de vectores.
+
+### `asignacionOptimaPar`
+
+La función genera inicialmente el conjunto de asignaciones candidatas utilizando la versión paralela del generador.
+
+Una vez obtenido el espacio de búsqueda completo, este se divide en dos mitades. Cada tarea calcula de forma independiente la asignación de menor costo dentro de su subconjunto de candidatos.
+
+Finalmente, se comparan ambos mínimos locales y se selecciona la asignación con menor costo global. Esta estrategia reduce el tiempo dedicado a explorar el espacio de búsqueda cuando el número de asignaciones es elevado.
+
+## Conclusiones de paralelización
+
+La paralelización permitió distribuir parte del trabajo computacional entre diferentes tareas concurrentes utilizando la función `parallel`. En funciones como `choquesPar`, `desperdicioPar`, `movilidadPar`, `generarAsignacionesPar` y `asignacionOptimaPar`, la estrategia consistió en dividir el problema en dos partes y procesarlas simultáneamente.
+
+Los resultados experimentales muestran que el paralelismo puede reducir los tiempos de ejecución cuando el tamaño del problema aumenta, especialmente en funciones que realizan una gran cantidad de cálculos o exploran espacios de búsqueda amplios. Sin embargo, para instancias pequeñas, la creación y coordinación de tareas paralelas puede introducir una sobrecarga que limita o incluso elimina las ganancias de rendimiento.
+
+El análisis mediante la Ley de Amdahl permitió comprender que la aceleración máxima depende de la proporción del programa que puede ejecutarse en paralelo. Por esta razón, aunque la paralelización mejora el desempeño, siempre existe una parte secuencial que limita la aceleración total alcanzable.
+
+En conclusión, la programación paralela constituye una estrategia efectiva para mejorar el rendimiento en problemas de mayor tamaño, siempre que la cantidad de trabajo paralelizable sea suficientemente grande para compensar los costos asociados a la gestión de tareas concurrentes.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## Puntos 2.3, 2.4 y 2.5
 

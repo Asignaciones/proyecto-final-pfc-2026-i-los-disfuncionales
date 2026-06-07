@@ -263,3 +263,562 @@ G -- No --> H[.sum ejecuta reducción de la lista]
 H --> I[Fin: Retorna total de choques]
 ```
 ---
+## Punto 2.5 - Calculando fallos y desperdicio de capacidad
+
+### Definición del Algoritmo
+
+```scala
+def desperdicio(cursos: Cursos, aulas: Aulas, a: Asignacion): Int =
+  cursos.indices.map { i =>
+    if (a(i) >= 0) {
+      val dif = capAula(aulas(a(i))) - estCurso(cursos(i))
+      math.max(dif, 0)
+    } else 0
+  }.sum
+```
+
+* La función `desperdicio` calcula la capacidad total desaprovechada en las aulas asignadas.
+* Para cada curso asignado se calcula la diferencia entre la capacidad del aula y la cantidad de estudiantes matriculados.
+* Si la diferencia es negativa, se toma el valor $0$ para evitar contabilizar desperdicios inexistentes.
+* Finalmente, se suman todos los desperdicios parciales mediante la función de alto orden `sum`.
+
+### Explicación paso a paso
+
+#### Caso base
+
+```scala
+if (a(i) < 0) 0
+```
+
+Cuando un curso no tiene aula asignada, no aporta desperdicio al resultado final.
+
+Además, si la diferencia entre capacidad y estudiantes es negativa:
+
+```scala
+math.max(dif, 0)
+```
+
+retorna $0$, evitando contabilizar valores inválidos.
+
+#### Caso inductivo
+
+```scala
+val dif = capAula(aulas(a(i))) - estCurso(cursos(i))
+```
+
+Para cada curso:
+
+* Se obtiene la capacidad del aula asignada.
+* Se obtiene el número de estudiantes del curso.
+* Se calcula la diferencia entre ambos valores.
+* Se conserva únicamente la parte positiva mediante `math.max`.
+* El resultado se incorpora al cálculo total utilizando `.sum`.
+
+---
+
+### Pasos de la ejecución
+
+Supongamos:
+
+```scala
+a = Vector(0, 1, 0)
+```
+
+con:
+
+| Curso | Capacidad Aula | Estudiantes |
+| ----- | -------------- | ----------- |
+| C1    | 30             | 25          |
+| C2    | 40             | 30          |
+| C3    | 30             | 20          |
+
+#### Paso 1
+
+```scala
+30 - 25 = 5
+```
+
+Desperdicio acumulado:
+
+```scala
+5
+```
+
+#### Paso 2
+
+```scala
+40 - 30 = 10
+```
+
+Desperdicio acumulado:
+
+```scala
+5 + 10 = 15
+```
+
+#### Paso 3
+
+```scala
+30 - 20 = 10
+```
+
+Desperdicio acumulado:
+
+```scala
+15 + 10 = 25
+```
+
+#### Resultado final
+
+```scala
+Vector(5,10,10).sum
+```
+
+$$
+5 + 10 + 10 = 25
+$$
+
+La función retorna:
+
+```scala
+25
+```
+
+---
+
+### Diferencia con recursión normal
+
+* En una implementación recursiva tradicional se recorrería la colección realizando una llamada por cada curso.
+* En esta solución funcional el recorrido es realizado internamente por `map`.
+* La acumulación final se realiza mediante `sum`, evitando variables mutables y manteniendo un estilo funcional.
+
+---
+
+### Ejemplo de uso
+
+```scala
+val resultado = desperdicio(cursos, aulas, asignacion)
+println(resultado)
+```
+
+Si la capacidad sobrante total es 25 puestos, la función retorna:
+
+```scala
+25
+```
+
+### Flujo Secuencial de Datos
+
+```mermaid
+flowchart TD
+  A[Inicio] --> B[Recorrer cursos.indices]
+  B --> C[Verificar si el curso está asignado]
+  C --> D[Calcular capacidad - estudiantes]
+  D --> E[Aplicar math.max]
+  E --> F[Generar desperdicio parcial]
+  F --> G[Continuar con siguiente curso]
+  G --> H[Aplicar sum]
+  H --> I[Retornar desperdicio total]
+```
+
+---
+
+## Punto 2.6 - Calculando el costo de movilidad
+
+### Definición del Algoritmo
+
+```scala
+def movilidad(cursos: Cursos, aulas: Aulas, d: Distancias,
+              a: Asignacion): Int =
+  cursos.indices
+    .filter(i => a(i) >= 0)
+    .sortBy(i => iniCurso(cursos(i)))
+    .sliding(2)
+    .map { par =>
+      d(a(par(0)))(a(par(1)))
+    }.sum
+```
+
+* La función `movilidad` calcula la distancia total recorrida entre aulas de cursos consecutivos.
+* Inicialmente se seleccionan únicamente los cursos que tienen un aula asignada mediante `filter`.
+* Posteriormente los cursos se ordenan por hora de inicio utilizando `sortBy`.
+* La función `sliding(2)` construye pares de cursos consecutivos.
+* Para cada par se obtiene la distancia entre las aulas asignadas.
+* Finalmente, todas las distancias calculadas se suman utilizando `sum`.
+
+### Explicación paso a paso
+
+#### Caso base
+
+```scala
+.filter(i => a(i) >= 0)
+```
+
+Si no existen cursos asignados o únicamente existe un curso asignado, no habrá pares consecutivos que procesar.
+
+En ese caso la movilidad total es:
+
+$$
+MV = 0
+$$
+
+#### Caso inductivo
+
+```scala
+.sliding(2)
+.map { par =>
+  d(a(par(0)))(a(par(1)))
+}
+```
+
+Para cada par consecutivo de cursos:
+
+* Se obtiene el aula del primer curso.
+* Se obtiene el aula del segundo curso.
+* Se consulta la distancia entre ambas aulas en la matriz de distancias.
+* La distancia calculada se agrega al conjunto de resultados parciales.
+* Finalmente todas las distancias se suman mediante `.sum`.
+
+---
+
+### Pasos de la ejecución
+
+Supongamos la siguiente asignación:
+
+```scala
+a = Vector(0, 1, 0)
+```
+
+y los cursos:
+
+| Curso | Hora Inicio | Aula |
+| ----- | ----------- | ---- |
+| M01   | 4           | 0    |
+| M02   | 6           | 1    |
+| M03   | 12          | 0    |
+
+Matriz de distancias:
+
+$$
+D =
+\begin{bmatrix}
+0 & 3\
+3 & 0
+\end{bmatrix}
+$$
+
+#### Paso 1
+
+```scala
+cursos.indices
+```
+
+Genera:
+
+```scala
+Vector(0,1,2)
+```
+
+#### Paso 2
+
+```scala
+.filter(i => a(i) >= 0)
+```
+
+Todos los cursos están asignados:
+
+```scala
+Vector(0,1,2)
+```
+
+#### Paso 3
+
+```scala
+.sortBy(i => iniCurso(cursos(i)))
+```
+
+Los cursos ya se encuentran ordenados por hora de inicio:
+
+```scala
+Vector(0,1,2)
+```
+
+#### Paso 4
+
+```scala
+.sliding(2)
+```
+
+Genera los pares consecutivos:
+
+```scala
+Vector(0,1)
+Vector(1,2)
+```
+
+#### Paso 5
+
+Se calculan las distancias:
+
+Primer par:
+
+```scala
+d(0)(1) = 3
+```
+
+Segundo par:
+
+```scala
+d(1)(0) = 3
+```
+
+#### Paso 6
+
+```scala
+Vector(3,3).sum
+```
+
+$$
+3 + 3 = 6
+$$
+
+La movilidad total es:
+
+```scala
+6
+```
+
+---
+
+### Diferencia con recursión normal
+
+* En una implementación recursiva tradicional se recorrerían manualmente los cursos ordenados calculando la distancia entre cada par consecutivo.
+* En esta solución funcional, el recorrido es realizado mediante funciones de alto orden.
+* `filter` selecciona los cursos válidos.
+* `sortBy` organiza los cursos cronológicamente.
+* `sliding` construye automáticamente los pares consecutivos.
+* `map` transforma cada par en una distancia.
+* `sum` realiza la acumulación final.
+
+---
+
+### Ejemplo de uso
+
+```scala
+val resultado = movilidad(cursos, aulas, distancias, asignacion)
+println(resultado)
+```
+
+Si la distancia total recorrida entre aulas consecutivas es 6, la función retorna:
+
+```scala
+6
+```
+
+### Flujo Secuencial de Datos
+
+```mermaid
+flowchart TD
+    A[Inicio] --> B[Recorrer cursos.indices]
+    B --> C[Filtrar cursos asignados]
+    C --> D[Ordenar por hora de inicio]
+    D --> E[Formar pares consecutivos con sliding]
+    E --> F[Calcular distancia entre aulas]
+    F --> G[Sumar distancias]
+    G --> H[Retornar movilidad total]
+```
+---
+## Punto 2.7 - Calculando el costo total
+
+### Definición del Algoritmo
+
+```scala
+def costoAsignacion(cursos: Cursos, aulas: Aulas, d: Distancias,
+                    a: Asignacion, w: Pesos): Int = {
+
+  // Guardamos cada peso en una variable para usar la fórmula más fácilmente
+  val (wCH, wCF, wDE, wMV) = w
+
+  wCH * choques(cursos, a) +
+  wCF * capacidadFallida(cursos, aulas, a) +
+  wDE * desperdicio(cursos, aulas, a) +
+  wMV * movilidad(cursos, aulas, d, a)
+}
+```
+
+* La función `costoAsignacion` calcula el costo total de una asignación de aulas.
+* Inicialmente se extraen los pesos asociados a cada criterio de evaluación mediante pattern matching.
+* Posteriormente se calculan las métricas:
+
+  * Choques de horario.
+  * Fallos de capacidad.
+  * Desperdicio de capacidad.
+  * Costo de movilidad.
+* Cada métrica es multiplicada por su peso correspondiente.
+* Finalmente se suman todas las contribuciones para obtener el costo total.
+
+### Explicación paso a paso
+
+#### Caso base
+
+No existe un caso base explícito, ya que la función no realiza recorridos ni llamadas recursivas.
+
+El cálculo depende de los valores retornados por:
+
+```scala
+choques(...)
+capacidadFallida(...)
+desperdicio(...)
+movilidad(...)
+```
+
+Si todas las métricas son iguales a cero, el costo total será:
+
+$$
+CT = 0
+$$
+
+#### Caso inductivo
+
+```scala
+wCH \cdot CH +
+wCF \cdot CF +
+wDE \cdot DE +
+wMV \cdot MV
+```
+
+La función aplica directamente la fórmula definida en el enunciado del proyecto:
+
+$$
+CT =
+w_{CH} \cdot CH +
+w_{CF} \cdot CF +
+w_{DE} \cdot DE +
+w_{MV} \cdot MV
+$$
+
+donde:
+
+* $CH$ representa los choques de horario.
+* $CF$ representa los fallos de capacidad.
+* $DE$ representa el desperdicio de capacidad.
+* $MV$ representa el costo de movilidad.
+
+---
+
+### Pasos de la ejecución
+
+Supongamos:
+
+```scala
+w = (1000, 100, 1, 2)
+```
+
+y los siguientes resultados obtenidos previamente:
+
+```scala
+CH = 0
+CF = 1
+DE = 25
+MV = 6
+```
+
+#### Paso 1
+
+Aplicar el peso de choques:
+
+$$
+1000 \cdot 0 = 0
+$$
+
+#### Paso 2
+
+Aplicar el peso de capacidad fallida:
+
+$$
+100 \cdot 1 = 100
+$$
+
+#### Paso 3
+
+Aplicar el peso del desperdicio:
+
+$$
+1 \cdot 25 = 25
+$$
+
+#### Paso 4
+
+Aplicar el peso de movilidad:
+
+$$
+2 \cdot 6 = 12
+$$
+
+#### Paso 5
+
+Sumar todas las contribuciones:
+
+$$
+0 + 100 + 25 + 12 = 137
+$$
+
+La función retorna:
+
+```scala
+137
+```
+
+---
+
+### Diferencia con recursión normal
+
+* En una implementación recursiva tradicional podrían calcularse las métricas recorriendo manualmente las colecciones involucradas.
+* En esta solución funcional cada métrica ya fue calculada previamente mediante funciones especializadas.
+* La función `costoAsignacion` únicamente integra los resultados aplicando la fórmula matemática del costo total.
+* El enfoque favorece la modularidad y reutilización del código.
+
+---
+
+### Ejemplo de uso
+
+```scala
+val resultado =
+  costoAsignacion(cursos, aulas, distancias, asignacion, pesos)
+
+println(resultado)
+```
+
+Si el costo calculado es 137, la función retorna:
+
+```scala
+137
+```
+
+### Flujo Secuencial de Datos
+
+```mermaid
+flowchart TD
+    A[Calcular choques]
+    B[Calcular capacidadFallida]
+    C[Calcular desperdicio]
+    D[Calcular movilidad]
+
+    A --> E[Aplicar pesos]
+    B --> E
+    C --> E
+    D --> E
+
+    E --> F[Sumar contribuciones]
+    F --> G[Retornar costo total]
+```
+
+---
+
+## Conclusión de los puntos 2.5, 2.6 y 2.7
+
+Las funciones `desperdicio`, `movilidad` y `costoAsignacion` permiten evaluar la calidad de una asignación de aulas desde diferentes perspectivas.
+La primera cuantifica la capacidad desaprovechada, la segunda mide la distancia recorrida entre aulas consecutivas y la tercera integra todas las métricas relevantes mediante una función de costo ponderada.
+En conjunto, estas funciones constituyen la base para comparar distintas asignaciones y seleccionar posteriormente aquella que minimice el costo total.
+
+---
