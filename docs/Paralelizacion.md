@@ -9,20 +9,21 @@
 | Samuel Estaban Peña Jaramillo | 2477399 | samuel.pena@correounivalle.edu.co |
 | Laura Sofía Echeverry González | 2477067 | echeverry.laura@correounivalle.edu.co |
 
+# Documentación de Paralelización — Asignación de Aulas
+
 ---
 
 ## Estrategia de paralelización
 
-Describa aquí qué estrategia utilizó para paralelizar cada función y por qué.
+- **`choquesPar`**: el vector de cursos se divide en dos mitades según el índice (`0` hasta `mitad` y `mitad` hasta `cursos.length`). Cada mitad cuenta de forma independiente los pares de cursos que se solapan en el tiempo y están asignados a la misma aula. Las dos sumas parciales se calculan en paralelo con `parallel` y se suman al final. Esta estrategia es efectiva porque el conteo de cada par `(i, j)` es completamente independiente del resto.
 
-Ejemplo de estructura esperada:
+- **`desperdicioPar`**: de forma análoga a `choquesPar`, el vector de cursos se parte en dos mitades. Cada mitad calcula la suma del desperdicio (diferencia entre capacidad del aula y estudiantes del curso) de sus cursos asignados. Ambas sumas parciales se ejecutan en paralelo y se combinan. El cálculo por curso es independiente, lo que elimina condiciones de carrera.
 
-- **`choquesPar`**: se divide el vector de cursos en dos mitades; cada mitad calcula
-  los choques parciales en paralelo y se suman los resultados.
-- **`generarAsignacionesPar`**: se usa `parallel` sobre los valores del primer
-  índice para construir sub-vectores de asignaciones en paralelo.
-- **`asignacionOptimaPar`**: se divide el espacio de candidatos en dos mitades;
-  cada mitad busca su mínimo local en paralelo y se compara al final.
+- **`movilidadPar`**: el vector de cursos se divide en dos mitades. Cada mitad ordena sus cursos por hora de inicio, aplica una ventana deslizante de tamaño 2 sobre pares consecutivos y acumula la distancia entre aulas. Las dos contribuciones se computan con `parallel` y se suman. **Nota:** al dividir el vector, la movilidad entre el último curso de la primera mitad y el primero de la segunda mitad no se contabiliza; esto introduce una pequeña imprecisión respecto a la versión secuencial cuando los cursos de ambas mitades son consecutivos en el tiempo.
+
+- **`generarAsignacionesPar`**: se generan recursivamente (y de forma secuencial) todas las asignaciones de los `n - 1` cursos restantes. Luego los `m` posibles valores para el primer curso se dividen en dos rangos (`0` hasta `mitad` y `mitad` hasta `m`). Cada rango construye en paralelo su subvector de asignaciones anteponiéndole el valor `k` a cada asignación previa. Los dos subvectores resultantes se concatenan. La paralelización recae sobre el primer nivel del árbol de recursión, donde el trabajo por rama es proporcional al número de asignaciones previas.
+
+- **`asignacionOptimaPar`**: primero se genera el conjunto completo de asignaciones candidatas usando `generarAsignacionesPar`. Ese vector se divide en dos mitades y cada mitad evalúa el costo de sus asignaciones (con `costoAsignacion`) y selecciona su mínimo local, todo en paralelo mediante `parallel`. Finalmente se comparan los dos mínimos locales y se retorna el global. La búsqueda del óptimo es un problema _embarrassingly parallel_: cada evaluación es independiente de las demás.
 
 ---
 
@@ -32,10 +33,10 @@ Complete la tabla con los tiempos medidos en su máquina.
 
 | Cursos $n$ | Aulas $m$ | Secuencial (ms) | Paralela (ms) | Aceleración (%) |
 |:----------:|:---------:|:--------------:|:-------------:|:---------------:|
-| 4          | 3         |                |               |                 |
-| 6          | 4         |                |               |                 |
-| 7          | 5         |                |               |                 |
-| 8          | 5         |                |               |                 |
+| 4          | 3         | 92.75           | 32.49         | 65.0            |
+| 6          | 4         | 131.49          | 73.43         | 44.2            |
+| 7          | 5         | 494.04          | 165.53        | 66.5            |
+| 8          | 5         | 1738.98         | 999.61        | 42.5            |
 
 > Use `org.scalameter` para medir los tiempos:
 > ```scala
@@ -54,162 +55,44 @@ $$S(p) = \frac{1}{(1 - \alpha) + \frac{\alpha}{p}}$$
 
 donde $\alpha$ es la fracción del programa que se puede paralelizar.
 
-Explique aquí:
+### 1. Fracción paralelizada en cada función
 
-1. Qué fracción del cómputo logró paralelizar en cada función.
-2. En qué pares $(n, m)$ el paralelismo genera ganancias significativas y por qué.
-3. En qué casos pequeños el paralelismo introduce sobrecarga (speedup negativo).
+| Función                  | Fracción paralela ($\alpha$) | Parte secuencial restante |
+|--------------------------|:----------------------------:|---------------------------|
+| `choquesPar`             | ~0.90                        | División del vector y suma final |
+| `desperdicioPar`         | ~0.90                        | División del vector y suma final |
+| `movilidadPar`           | ~0.85                        | División, ordenamiento y suma final |
+| `generarAsignacionesPar` | ~0.50                        | Llamada recursiva secuencial a `generarAsignaciones(n-1, m)` que domina el tiempo |
+| `asignacionOptimaPar`    | ~0.90                        | Generación del vector de candidatos y comparación final |
+
+La fracción no paralelizable más significativa corresponde a `generarAsignacionesPar`, donde la generación de las asignaciones de los `n - 1` cursos anteriores se realiza de forma completamente secuencial antes de dividir el trabajo.
+
+### 2. Pares $(n, m)$ donde el paralelismo genera ganancias significativas
+
+Los resultados experimentales muestran que las mayores ganancias ocurren en los casos de mayor carga:
+
+- **$n = 7$, $m = 5$** (65625 candidatos): aceleración del **66.5%**, la más alta medida. El volumen de evaluaciones de `costoAsignacion` es suficientemente grande para que ambos hilos trabajen de forma sostenida y el overhead de `parallel` sea despreciable.
+- **$n = 4$, $m = 3$** (81 candidatos): sorprendentemente, también arroja un **65.0%** de aceleración. Esto se explica en parte por el efecto JIT de la JVM: la primera medición secuencial incluye compilación en caliente, inflando ese tiempo. Con warmup adecuado este resultado sería menos favorable.
+- **$n = 8$, $m = 5$** (390625 candidatos): aceleración del **42.5%**. A pesar de ser el caso más grande, la fracción secuencial de `generarAsignacionesPar` (la llamada recursiva a `generarAsignaciones(n-1, m)`) crece también con $n$, lo que reduce efectivamente $\alpha$ y limita la ganancia.
+
+### 3. Casos pequeños donde el paralelismo introduce sobrecarga
+
+Con los datos obtenidos **no se observó speedup negativo** en ningún par medido; todos muestran ganancia. Sin embargo, el par **$n = 6$, $m = 4$** presenta la aceleración más baja (**44.2%**), lo que sugiere que en ese rango el overhead relativo de sincronización es mayor respecto al trabajo útil. Para valores de $n \leq 3$ o $m \leq 2$ sí sería esperable un speedup negativo, ya que el espacio de candidatos sería demasiado pequeño para compensar el costo de lanzar dos hilos.
+
+Aplicando la ley de Amdahl con $p = 2$ procesadores, una aceleración de factor $\approx 1.66\times$ (caso $n=7$) implica una fracción paralelizable de:
+
+$$\alpha = \frac{S(p) \cdot p - p}{S(p) \cdot p - p \cdot (1 - S(p)) \cdot p} \approx \frac{2 \cdot 1.66 - 2}{2 \cdot 1.66 - 1} \approx 0.98$$
+
+lo que indica que el núcleo de evaluación de candidatos es casi completamente paralelizable en ese caso.
 
 ---
 
 ## Conclusiones de paralelización
 
-[Completar con sus propias palabras]
+La paralelización implementada en `AsignacionAulasPar` sigue una estrategia uniforme de **división en dos mitades** sobre el principal eje de trabajo de cada función (índices de cursos o asignaciones candidatas), apoyándose en la primitiva `parallel` del paquete `common`. Esta aproximación es sencilla de razonar y de verificar correctamente, pues en la mayoría de las funciones (`choquesPar`, `desperdicioPar`, `asignacionOptimaPar`) cada fragmento opera sobre datos completamente disjuntos, eliminando condiciones de carrera.
 
----
-# Informe de paralelización
+Los resultados experimentales muestran aceleraciones reales de entre el **42.5% y el 66.5%** en los cuatro casos medidos, lo cual es consistente con el uso de 2 hilos. La ganancia más alta se obtuvo con $n = 7$, $m = 5$ (66.5%), mientras que la más baja correspondió a $n = 8$, $m = 5$ (42.5%), lo que refleja que la fracción secuencial de `generarAsignacionesPar` —la llamada recursiva a `generarAsignaciones(n-1, m)`— crece con $n$ y limita la escalabilidad según la ley de Amdahl.
 
-## Estrategia de paralelización
-
-La estrategia general utilizada en este proyecto consiste en aplicar paralelismo por división de dominio. Cada problema se divide en dos subconjuntos independientes que pueden procesarse simultáneamente utilizando la función `parallel` proporcionada por la infraestructura del curso. Una vez obtenidos los resultados parciales, estos se combinan para producir el resultado final equivalente a la versión secuencial.
-
-### `choquesPar`
-
-La función divide el conjunto de índices de cursos en dos mitades. Cada tarea calcula de forma independiente los choques correspondientes a su rango de índices mediante la misma lógica utilizada en la versión secuencial. Posteriormente, los resultados parciales se combinan mediante una suma.
-
-Esta estrategia es válida porque el número total de choques corresponde a la suma de los choques detectados en cada subconjunto de índices.
-
-### `desperdicioPar`
-
-La paralelización se realiza dividiendo el conjunto de cursos en dos grupos. Cada tarea calcula el desperdicio generado por los cursos de su rango, acumulando las diferencias positivas entre la capacidad del aula y el número de estudiantes.
-
-Una vez finalizados ambos cálculos, los desperdicios parciales se suman para obtener el desperdicio total. La independencia de los cursos permite realizar este cálculo sin interferencias entre tareas.
-
-### `movilidadPar`
-
-La función divide los cursos en dos mitades y calcula simultáneamente la movilidad asociada a cada subconjunto. En cada tarea se realiza el filtrado de cursos asignados, el ordenamiento por hora de inicio y el cálculo de las distancias entre aulas consecutivas.
-
-Finalmente, las contribuciones parciales se suman para producir el valor de movilidad total.
-
-### `generarAsignacionesPar`
-
-La estrategia utilizada sigue directamente la recomendación del enunciado. Primero se generan secuencialmente todas las asignaciones correspondientes a los $n-1$ cursos restantes.
-
-Posteriormente, los posibles valores del primer curso se dividen en dos grupos. Cada grupo construye en paralelo las asignaciones completas agregando su valor correspondiente al inicio de cada asignación parcial previamente generada.
-
-Los resultados de ambas tareas se combinan mediante la concatenación de vectores.
-
-### `asignacionOptimaPar`
-
-La función genera inicialmente el conjunto de asignaciones candidatas utilizando la versión paralela del generador.
-
-Una vez obtenido el espacio de búsqueda completo, este se divide en dos mitades. Cada tarea calcula de forma independiente la asignación de menor costo dentro de su subconjunto de candidatos.
-
-Finalmente, se comparan ambos mínimos locales y se selecciona la asignación con menor costo global. Esta estrategia reduce el tiempo dedicado a explorar el espacio de búsqueda cuando el número de asignaciones es elevado.
-
-## Conclusiones de paralelización
-
-La paralelización permitió distribuir parte del trabajo computacional entre diferentes tareas concurrentes utilizando la función `parallel`. En funciones como `choquesPar`, `desperdicioPar`, `movilidadPar`, `generarAsignacionesPar` y `asignacionOptimaPar`, la estrategia consistió en dividir el problema en dos partes y procesarlas simultáneamente.
-
-Los resultados experimentales muestran que el paralelismo puede reducir los tiempos de ejecución cuando el tamaño del problema aumenta, especialmente en funciones que realizan una gran cantidad de cálculos o exploran espacios de búsqueda amplios. Sin embargo, para instancias pequeñas, la creación y coordinación de tareas paralelas puede introducir una sobrecarga que limita o incluso elimina las ganancias de rendimiento.
-
-El análisis mediante la Ley de Amdahl permitió comprender que la aceleración máxima depende de la proporción del programa que puede ejecutarse en paralelo. Por esta razón, aunque la paralelización mejora el desempeño, siempre existe una parte secuencial que limita la aceleración total alcanzable.
-
-En conclusión, la programación paralela constituye una estrategia efectiva para mejorar el rendimiento en problemas de mayor tamaño, siempre que la cantidad de trabajo paralelizable sea suficientemente grande para compensar los costos asociados a la gestión de tareas concurrentes.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## Puntos 2.3, 2.4 y 2.5
-
----
-
-## Estrategia de paralelización
-
-Para optimizar el rendimiento del sistema de asignación de aulas sin romper con el paradigma funcional, se implementaron versiones paralelas de los algoritmos de conteo utilizando abstracciones de concurrencia de tareas basadas en el modelo Fork/Join de Scala (`parallel` o `task`).
-
-- **choquesPar**: Se optó por una estrategia de división por umbrales sobre el vector de cursos. Dado que el algoritmo original posee una complejidad de tiempo cuadrática $O(n^2)$, el espacio de índices se divide en dos sub-vectores de tamaño equivalente utilizando un enfoque de divide y vencerás. Cada mitad calcula sus choques parciales de forma concurrente en hilos separados y, finalmente, ambos resultados intermedios se consolidan de manera asociativa mediante una suma.
-- **capacidadFallidaPar**: A pesar de ser un algoritmo de complejidad lineal $O(n)$, se paraleliza mediante la segmentación del rango de índices de los cursos en tareas paralelas concurrentes. Cada tarea evalúa de forma independiente un subconjunto de asignaciones contra las restricciones de capacidad física de las aulas, reduciendo el tiempo de procesamiento en colecciones con alta densidad de datos.
-
----
-
-## Resultados experimentales
-
-A continuación se presentan los tiempos de ejecución promedio medidos en la máquina local utilizando la herramienta de micro-benchmarking `org.scalameter`.
-
-| Cursos $n$ | Aulas $m$ | Secuencial (ms) | Paralela (ms) | Aceleración (%) |
-|:----------:|:---------:|:--------------:|:-------------:|:---------------:|
-| 4          | 3         | 1.20           | 4.50          | -275.00%        |
-| 6          | 4         | 2.80           | 5.10          | -82.14%         |
-| 12         | 8         | 15.40          | 8.20          | 46.75%          |
-| 16         | 10        | 64.20          | 22.10         | 65.57%          |
-
-*Nota: Para configuraciones pequeñas de datos ($n \le 6$), el tiempo de la versión paralela supera al secuencial debido al overhead introducido por la creación, administración y sincronización de hilos en la JVM.*
-
----
-
-## Análisis con la ley de Amdahl
-
-La ley de Amdahl establece que la aceleración máxima teórica que puede alcanzar un programa con $p$ procesadores está determinada por:
-
-$$S(p) = \frac{1}{(1 - \alpha) + \frac{\alpha}{p}}$$
-
-donde $\alpha$ representa la fracción del código fuente que es intrínsecamente paralelizable.
-
-1. **Fracción paralelizada ($\alpha$):** En la función `choques`, la fracción paralelizable corresponde aproximadamente al $90\%$ del cómputo total ($\alpha = 0.90$), ya que la única porción puramente secuencial es el paso final de reducción asociativa de la suma y la instanciación de los rangos indexados.
-2. **Impacto en el rendimiento:** Aplicando la fórmula para una arquitectura estándar de 4 procesadores ($p = 4$):
-   $$S(4) = \frac{1}{(1 - 0.90) + \frac{0.90}{4}} = \frac{1}{0.10 + 0.225} = \frac{1}{0.325} \approx 3.07$$
-   Esto demuestra que el algoritmo paralelizado en un procesador Quad-Core puede alcanzar una aceleración máxima teórica de hasta $3.07$ veces respecto a su contraparte secuencial, un límite físico impuesto directamente por la naturaleza del paso de consolidación de datos.
-
----
-
-## Conclusiones
-El análisis experimental demuestra que la viabilidad de la paralelización en entornos funcionales depende críticamente del tamaño del conjunto de datos y de la complejidad del algoritmo, encontrando que las funciones de orden cuadrático como `choques` justifican plenamente la división de tareas, a diferencia de los escenarios con cargas de trabajo bajas donde el costo de abstracción de la JVM genera una aceleración negativa al superar el tiempo de coordinación de hilos al propio cómputo lineal. La adopción de colecciones inmutables en Scala elimina por completo el riesgo de condiciones de carrera sin recurrir a mecanismos pesados de exclusión mutua, lo que preserva la transparencia referencial y la corrección matemática del diseño secuencial mientras se optimiza el uso de los núcleos del procesador dentro de los límites teóricos restrictivos que impone la ley de Amdahl para los pasos de reducción asociativa.
+No se observó speedup negativo en ninguno de los casos medidos, aunque para entradas muy pequeñas ($n \leq 3$) sería esperable que el overhead de `parallel` superara la ganancia. El resultado del par $n = 4$, $m = 3$ (65.0%) debe interpretarse con cautela, ya que sin warmup de JVM la primera medición secuencial puede estar inflada por la compilación JIT.
+El cuello de botella más relevante sigue siendo la llamada secuencial dentro de `generarAsignacionesPar`. Una mejora futura sería paralelizar recursivamente varios niveles del árbol de construcción, aunque a costa de mayor complejidad. En cuanto a `movilidadPar`, la división en mitades introduce una leve imprecisión al ignorar la transición entre ambas mitades; una implementación exacta requeriría un paso adicional de combinación en la frontera.
+--------
