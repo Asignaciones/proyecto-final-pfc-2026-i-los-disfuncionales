@@ -1117,10 +1117,13 @@ Para cada asignación `a` en el vector:
 
    que implementa la función de costo total $CT_\alpha$ definida en el enunciado:
 
-   $$
-   CT_\alpha = w_{CH} \cdot CH_\alpha + w_{CF} \cdot CF_\alpha +
-   w_{DE} \cdot DE_\alpha + w_{MV} \cdot MV_\alpha.
-   $$
+```math
+CT_{\alpha} =
+w_{CH} \cdot CH_{\alpha} +
+w_{CF} \cdot CF_{\alpha} +
+w_{DE} \cdot DE_{\alpha} +
+w_{MV} \cdot MV_{\alpha}
+```
 
 2. Se construye una tupla `(a, c)` que relaciona la asignación con su costo.
 3. `map` devuelve un `Vector[(Asignacion, Int)]` que contiene todas las parejas $(\alpha, CT_\alpha)$.
@@ -1145,11 +1148,10 @@ La función `minBy(_._2)` recorre todas las tuplas `(a, c)` y devuelve aquella c
 
 - En términos del problema, estamos calculando:
 
-  $$
-  (\alpha^*, CT_{\alpha^*}) =
-  \operatorname*{arg\,min}_{\alpha \in \mathcal{A}(n,m)}
-  CT_\alpha.
-  $$
+```math
+(\alpha^{*}, CT_{\alpha^{*}}) =
+\min_{\alpha \in \mathcal{A}(n,m)} CT_{\alpha}
+```
 
 ---
 
