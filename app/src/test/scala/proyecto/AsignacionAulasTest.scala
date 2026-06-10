@@ -383,6 +383,72 @@ class AsignacionAulasTest extends AnyFunSuite {
     assert(res.toSet == esperado)
   }
 
+  test("generarAsignaciones: todas las asignaciones tienen longitud n") {
+
+    val res = generarAsignaciones(3, 2)
+
+    assert(
+      res.forall(_.length == 3)
+    )
+  }
+
+  test("generarAsignaciones: no genera asignaciones repetidas") {
+
+    val res = generarAsignaciones(3, 2)
+
+    assert(
+      res.length == res.distinct.length
+    )
+  }
+
+  test("generarAsignaciones: todos los valores pertenecen al rango de aulas") {
+
+    val m = 3
+
+    val res = generarAsignaciones(3, m)
+
+    assert(
+      res.flatten.forall(x => x >= 0 && x < m)
+    )
+  }
+
+  test("generarAsignaciones: cantidad de asignaciones es m elevado a n") {
+
+    val n = 4
+    val m = 2
+
+    val res = generarAsignaciones(n, m)
+
+    assert(
+      res.length == math.pow(m, n).toInt
+    )
+  }
+
+  test("generarAsignaciones: con una sola aula existe una unica asignacion posible") {
+
+    val res = generarAsignaciones(3, 1)
+
+    assert(
+      res == Vector(
+        Vector(0, 0, 0)
+      )
+    )
+  }
+
+  test("generarAsignaciones: cada aula aparece al menos una vez en alguna asignacion") {
+
+    val m = 3
+
+    val res = generarAsignaciones(2, m)
+
+    val aulasUsadas =
+      res.flatten.toSet
+
+    assert(
+      aulasUsadas == Set(0, 1, 2)
+    )
+  }
+
   // asignacionOptima
   test("asignacionOptima: el costo de la optima no supera el de [0,1,0] (37)") {
     val (_, costo) = asignacionOptima(c1, a1, d1, w)
@@ -426,5 +492,70 @@ class AsignacionAulasTest extends AnyFunSuite {
     val (asig, costo) = asignacionOptima(c1, a1, d1, w)
     assert(asig == Vector(1, 0, 0))
     assert(costo == 31)
+  }
+
+  test("asignacionOptima: la asignacion retornada pertenece al espacio generado") {
+
+    val (asig, _) =
+      asignacionOptima(c1, a1, d1, w)
+
+    val todas =
+      generarAsignaciones(c1.length, a1.length)
+
+    assert(todas.contains(asig))
+  }
+
+  test("asignacionOptima: el costo retornado coincide con el costo calculado para la asignacion") {
+
+    val (asig, costo) =
+      asignacionOptima(c1, a1, d1, w)
+
+    assert(
+      costoAsignacion(c1, a1, d1, asig, w) == costo
+    )
+  }
+
+  test("asignacionOptima: el costo optimo es menor o igual al de cualquier asignacion candidata") {
+
+    val (_, costoOptimo) =
+      asignacionOptima(c1, a1, d1, w)
+
+    val costos =
+      generarAsignaciones(c1.length, a1.length)
+        .map(a => costoAsignacion(c1, a1, d1, a, w))
+
+    assert(costos.forall(c => costoOptimo <= c))
+  }
+
+  test("asignacionOptima: con una unica aula todos los cursos quedan asignados a ella") {
+
+    val cursos: Cursos = Vector(
+      ("C1", 0, 4, 20),
+      ("C2", 4, 8, 25)
+    )
+
+    val aulas: Aulas = Vector(
+      ("A1", 40)
+    )
+
+    val dist: Distancias = Vector(
+      Vector(0)
+    )
+
+    val (asig, _) =
+      asignacionOptima(cursos, aulas, dist, w)
+
+    assert(asig == Vector(0, 0))
+  }
+
+  test("asignacionOptima: con un unico curso genera una asignacion de tamaño 1") {
+
+    val cursos: Cursos =
+      Vector(("U1", 0, 4, 20))
+
+    val (asig, _) =
+      asignacionOptima(cursos, a1, d1, w)
+
+    assert(asig.length == 1)
   }
 }
