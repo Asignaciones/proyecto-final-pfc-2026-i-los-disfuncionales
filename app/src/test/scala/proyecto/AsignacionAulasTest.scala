@@ -353,7 +353,6 @@ class AsignacionAulasTest extends AnyFunSuite {
     assert(costoAsignacion(curso, a1, d1, Vector(0), w) == 5)
   }
 
-
   // generarAsignaciones
   test("generarAsignaciones: 2 cursos y 2 aulas produce 4 asignaciones") {
     assert(generarAsignaciones(2, 2).length == 4)
@@ -363,9 +362,69 @@ class AsignacionAulasTest extends AnyFunSuite {
     assert(generarAsignaciones(3, 3).length == 27)
   }
 
+  test("generarAsignaciones: n=0 produce solo la asignacion vacia") {
+    val res = generarAsignaciones(0, 3)
+    assert(res == Vector(Vector.empty[Int]))
+  }
+
+  test("generarAsignaciones: n=1,m=3 produce exactamente Vector(0),Vector(1),Vector(2)") {
+    val res = generarAsignaciones(1, 3)
+    assert(res == Vector(Vector(0), Vector(1), Vector(2)))
+  }
+
+  test("generarAsignaciones: n=2,m=2 produce exactamente las 4 combinaciones posibles") {
+    val res = generarAsignaciones(2, 2)
+    val esperado = Set(
+      Vector(0, 0),
+      Vector(0, 1),
+      Vector(1, 0),
+      Vector(1, 1)
+    )
+    assert(res.toSet == esperado)
+  }
+
   // asignacionOptima
   test("asignacionOptima: el costo de la optima no supera el de [0,1,0] (37)") {
     val (_, costo) = asignacionOptima(c1, a1, d1, w)
     assert(costo <= 37)
+  }
+
+  test("asignacionOptima: con un solo curso y un aula devuelve costo igual al desperdicio") {
+    val cursosUnico: Cursos = Vector(("U1", 0, 4, 20))
+    val aulasUnica: Aulas   = Vector(("A1", 30))
+    val dUnica: Distancias  = Vector(Vector(0))
+    val pesos: Pesos        = (1000, 100, 1, 2)
+
+    val (asig, costo) = asignacionOptima(cursosUnico, aulasUnica, dUnica, pesos)
+
+    assert(asig == Vector(0))  // único curso en única aula
+    assert(costo == 10)        // desperdicio 30-20 = 10
+  }
+
+  test("asignacionOptima: con dos cursos sin solaparse minimiza desperdicio") {
+    val cursos2: Cursos = Vector(
+      ("C1", 0, 4, 20),
+      ("C2", 4, 8, 20)
+    )
+    val aulas2: Aulas = Vector(
+      ("A1", 30),
+      ("A2", 40)
+    )
+    val d2: Distancias = Vector(
+      Vector(0, 5),
+      Vector(5, 0)
+    )
+    val pesos2: Pesos = (1000, 100, 1, 2)
+
+    val (asig, costo) = asignacionOptima(cursos2, aulas2, d2, pesos2)
+
+    assert(asig == Vector(0, 0))
+    assert(costo == 20)
+  }
+
+  test("asignacionOptima: reproduce el costo 31 de la mejor asignacion del ejemplo 1") {
+    val (asig, costo) = asignacionOptima(c1, a1, d1, w)
+    assert(asig == Vector(1, 0, 0))
+    assert(costo == 31)
   }
 }
