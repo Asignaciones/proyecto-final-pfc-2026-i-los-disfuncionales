@@ -857,11 +857,10 @@ def asignacionOptima(cursos: Cursos, aulas: Aulas, d: Distancias,
 
 El problema formal define, para un conjunto fijo de cursos $C$, un conjunto de aulas $A$, una matriz de distancias $DA$ y pesos $w$, la función de costo total $CT_\alpha(C,A,DA,w)$ asociada a cada asignación completa $\alpha$. La especificación de la asignación óptima es:
 
-$$
-f_{\mathrm{opt}}(C,A,DA,w)
-=
-\operatorname*{arg\,min}_{\alpha \in \mathcal{A}(n,m)} CT_\alpha(C,A,DA,w),
-$$
+```math
+f_{\mathrm{opt}}(C,A,DA,w) =
+\min_{\alpha \in \mathcal{A}(n,m)} CT_{\alpha}(C,A,DA,w)
+```
 
 donde $\mathcal{A}(n,m)$ es el conjunto de todas las asignaciones completas:
 
@@ -910,8 +909,7 @@ val asignacionesConCosto =
 construye el vector:
 
 $$
-\texttt{asignacionesConCosto}
-=
+\texttt{asignacionesConCosto} =
 \big[\, (\alpha, CT_\alpha) \mid \alpha \in \mathcal{A}(n,m) \,\big],
 $$
 
@@ -923,22 +921,24 @@ ya que `costoAsignacion` calcula exactamente $CT_\alpha$ para cada $\alpha$.
 asignacionesConCosto.minBy(_._2)
 ```
 
-devuelve un par $(\alpha^*, c^*)$ donde $c^*$ es el mínimo valor entre todos los segundos componentes:
+devuelve un par $(\alpha^{*}, c^{*})$ donde $c^{*}$ es el mínimo valor entre todos los segundos componentes:
 
-$$
-(\alpha^*, c^*) =
-\operatorname*{arg\,min}_{(\alpha,c) \in \texttt{asignacionesConCosto}} c.
-$$
+```math
+(\alpha^{*}, c^{*}) =
+\min_{(\alpha,c) \in A} c
+```
 
-Dado que $c = CT_\alpha$, esto equivale a:
+donde $A$ denota el conjunto de todas las parejas $(\alpha,c)$ en `asignacionesConCosto`.
 
-$$
-(\alpha^*, c^*) =
+Dado que $c = CT_{\alpha}$, esto equivale a:
+
+```math
+(\alpha^{*}, c^{*}) =
 \left(
-\operatorname*{arg\,min}_{\alpha \in \mathcal{A}(n,m)} CT_\alpha,\
-\min_{\alpha \in \mathcal{A}(n,m)} CT_\alpha
-\right).
-$$
+\min_{\alpha \in \mathcal{A}(n,m)} CT_{\alpha},
+\min_{\alpha \in \mathcal{A}(n,m)} CT_{\alpha}
+\right)
+```
 
 ### Correctitud de `asignacionOptima`
 
@@ -991,8 +991,7 @@ que es precisamente la definición de asignación óptima requerida en el proble
 Por lo tanto, se cumple:
 
 $$
-P_{\mathrm{opt}}(C,A,DA,w)
-=
+P_{\mathrm{opt}}(C,A,DA,w) =
 f_{\mathrm{opt}}(C,A,DA,w),
 $$
 
