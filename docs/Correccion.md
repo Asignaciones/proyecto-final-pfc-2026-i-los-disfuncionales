@@ -718,3 +718,282 @@ $$P_{CT}(cursos,aulas,d,a,w)=CT(cursos,aulas,d,a,w)$$
 Por lo tanto, la función `costoAsignacion` es formalmente correcta.
 
 ---
+
+## 2.8 Función `generarAsignaciones`
+
+```scala
+def generarAsignaciones(n: Int, m: Int): Vector[Asignacion] = {
+  if (n == 0) {
+    Vector(Vector.empty[Int])
+  } else {
+    generarAsignaciones(n - 1, m).flatMap { asignacionParcial =>
+      Vector.tabulate(m)(k => asignacionParcial :+ k)
+    }
+  }
+}
+```
+
+### Especificación matemática
+
+Sea $n \in \mathbb{N}$ el número de cursos y $m \in \mathbb{N}$ el número de aulas, con $m \ge 1$. Definimos el conjunto de todas las asignaciones completas posibles como:
+
+$$
+\mathcal{A}(n,m) = \{\, \alpha \in \{0,1,\ldots,m-1\}^n \,\}.
+$$
+
+La especificación matemática de la función es:
+
+$$
+f_{\mathrm{gen}}(n,m) = \mathcal{A}(n,m).
+$$
+
+Es decir, para cada par $(n,m)$, la función debe devolver exactamente todos los vectores de longitud $n$ con entradas en $\{0,\ldots,m-1\}$, sin repetir ni omitir ninguno.
+
+### Idea recursiva
+
+Observamos que el conjunto $\mathcal{A}(n,m)$ se puede definir recursivamente sobre $n$:
+
+- Para $n = 0$, solo existe el vector vacío:
+
+$$
+\mathcal{A}(0,m) = \{ \langle\,\rangle \}.
+$$
+
+- Para $n > 0$, cualquier $\alpha \in \mathcal{A}(n,m)$ se puede escribir como $\beta \frown \langle k \rangle$, donde $\beta \in \mathcal{A}(n-1,m)$ y $k \in \{0,\ldots,m-1\}$. Entonces:
+
+$$
+\mathcal{A}(n,m) =
+\{\, \beta \frown \langle k \rangle
+\mid \beta \in \mathcal{A}(n-1,m),\ 0 \le k < m \,\}.
+$$
+
+La implementación en Scala replica exactamente esta definición: el caso base $n=0$ devuelve un único vector vacío, y el caso recursivo toma todas las asignaciones de tamaño $n-1$ y, para cada una, agrega todas las posibles aulas $k \in \{0,\ldots,m-1\}$ al final usando `:+ k`.
+
+### Correctitud por inducción estructural sobre $n$
+
+Demostraremos que:
+
+$$
+\forall n \in \mathbb{N}\ \forall m \in \mathbb{N} :
+\texttt{generarAsignaciones}(n,m) = f_{\mathrm{gen}}(n,m).
+$$
+
+### **Caso base:** $n = 0$.
+
+La implementación devuelve `Vector(Vector.empty[Int])`, es decir el conjunto $\{ \langle\,\rangle \}$.
+
+Matemáticamente, por definición:
+
+$$
+f_{\mathrm{gen}}(0,m) = \mathcal{A}(0,m) = \{ \langle\,\rangle \}.
+$$
+
+Por lo tanto:
+
+$$
+\texttt{generarAsignaciones}(0,m) = f_{\mathrm{gen}}(0,m).
+$$
+
+### **Caso inductivo:** 
+Supongamos que para algún $n \ge 1$ se cumple la hipótesis de inducción:
+
+$$
+\texttt{generarAsignaciones}(n-1,m) = \mathcal{A}(n-1,m).
+$$
+
+La implementación para $n$ calcula:
+
+- `prev = generarAsignaciones(n - 1, m)`, y por HI, `prev` contiene exactamente todos los vectores de longitud $n-1$ sobre $\{0,\ldots,m-1\}$.
+- Luego aplica:
+
+$$
+\texttt{prev.flatMap}\big(\lambda \beta.\ \texttt{Vector.tabulate}(m)(k \mapsto \beta :+ k)\big).
+$$
+
+Esto produce el conjunto:
+
+$$
+\{\, \beta \frown \langle k \rangle
+\mid \beta \in \mathcal{A}(n-1,m),\ 0 \le k < m \,\},
+$$
+
+ya que para cada $\beta$ genera exactamente los $m$ vectores $\beta :+ 0, \beta :+ 1, \ldots, \beta :+ (m-1)$.
+
+Por definición de $\mathcal{A}(n,m)$, ese conjunto es precisamente $\mathcal{A}(n,m)$. Por lo tanto:
+
+$$
+\texttt{generarAsignaciones}(n,m) = \mathcal{A}(n,m) = f_{\mathrm{gen}}(n,m),
+$$
+
+cerrando el paso inductivo.
+
+### **Conclusión**
+
+Por inducción estructural sobre $n$, la función `generarAsignaciones` devuelve exactamente el conjunto $\mathcal{A}(n,m)$ de todas las asignaciones completas posibles en $\{0,\ldots,m-1\}^n$, cumpliendo la especificación del punto 2.8 del proyecto.
+
+---
+
+### 2.9 Función `asignacionOptima`
+
+```scala
+def asignacionOptima(cursos: Cursos, aulas: Aulas, d: Distancias,
+                     w: Pesos): (Asignacion, Int) = {
+  val n = cursos.length
+  val m = aulas.length
+
+  val asignaciones: Vector[Asignacion] = generarAsignaciones(n, m)
+
+  val asignacionesConCosto: Vector[(Asignacion, Int)] =
+    asignaciones.map { a =>
+      val c = costoAsignacion(cursos, aulas, d, a, w)
+      (a, c)
+    }
+
+  asignacionesConCosto.minBy(_._2)
+}
+```
+
+### Especificación matemática
+
+El problema formal define, para un conjunto fijo de cursos $C$, un conjunto de aulas $A$, una matriz de distancias $DA$ y pesos $w$, la función de costo total $CT_\alpha(C,A,DA,w)$ asociada a cada asignación completa $\alpha$. La especificación de la asignación óptima es:
+
+$$
+f_{\mathrm{opt}}(C,A,DA,w)
+=
+\operatorname*{arg\,min}_{\alpha \in \mathcal{A}(n,m)} CT_\alpha(C,A,DA,w),
+$$
+
+donde $\mathcal{A}(n,m)$ es el conjunto de todas las asignaciones completas:
+
+$$
+\mathcal{A}(n,m) = \{\, \alpha \in \{0,\ldots,m-1\}^n \,\}.
+$$
+
+En términos del resultado de la función, queremos que `asignacionOptima` devuelva un par $(\alpha^\*, CT_{\alpha^\*})$ tal que:
+
+$$
+\alpha^\* \in \mathcal{A}(n,m)
+\quad\text{y}\quad
+\forall \beta \in \mathcal{A}(n,m):\ CT_{\alpha^\*} \le CT_\beta.
+$$
+
+Recordemos que `costoAsignacion` implementa exactamente la función $CT_\alpha$ definida en la sección 1.1.4 del enunciado, y ya fue demostrada correcta en el punto 2.7 del informe.
+
+### Descomposición funcional de la implementación
+
+La función `asignacionOptima` se puede ver como la composición de tres pasos:
+
+1. **Enumeración del dominio de búsqueda:**
+
+$$
+\texttt{asignaciones} = \texttt{generarAsignaciones}(n,m).
+$$
+
+Por el resultado de 2.8, esto equivale a:
+
+$$
+\texttt{asignaciones} = \mathcal{A}(n,m).
+$$
+
+2. **Cálculo del costo para cada asignación:**
+
+La comprensión:
+
+```scala
+val asignacionesConCosto =
+  asignaciones.map { a =>
+    val c = costoAsignacion(cursos, aulas, d, a, w)
+    (a, c)
+  }
+```
+
+construye el vector:
+
+$$
+\texttt{asignacionesConCosto}
+=
+\big[\, (\alpha, CT_\alpha) \mid \alpha \in \mathcal{A}(n,m) \,\big],
+$$
+
+ya que `costoAsignacion` calcula exactamente $CT_\alpha$ para cada $\alpha$.
+
+3. **Selección de la tupla con menor costo:**
+
+```scala
+asignacionesConCosto.minBy(_._2)
+```
+
+devuelve un par $(\alpha^*, c^*)$ donde $c^*$ es el mínimo valor entre todos los segundos componentes:
+
+$$
+(\alpha^*, c^*) =
+\operatorname*{arg\,min}_{(\alpha,c) \in \texttt{asignacionesConCosto}} c.
+$$
+
+Dado que $c = CT_\alpha$, esto equivale a:
+
+$$
+(\alpha^*, c^*) =
+\left(
+\operatorname*{arg\,min}_{\alpha \in \mathcal{A}(n,m)} CT_\alpha,\
+\min_{\alpha \in \mathcal{A}(n,m)} CT_\alpha
+\right).
+$$
+
+### Correctitud de `asignacionOptima`
+
+Probamos que la salida de la función cumple con la especificación:
+
+1. **La asignación devuelta es completa.**
+
+Como `generarAsignaciones(n,m)` solo produce vectores en $\{0,\ldots,m-1\}^n$, cualquier `a` en `asignaciones` cumple:
+
+$$
+\forall i \in \{0,\ldots,n-1\} : 0 \le a(i) \le m-1.
+$$
+
+Es decir, todos los cursos están asignados a alguna aula (no aparecen valores $-1$). El par devuelto por `minBy(_._2)` toma su primer componente de esta colección, por lo que $\alpha^\* \in \mathcal{A}(n,m)$.
+
+2. **El costo de la asignación devuelta es mínimo.**
+
+Sea:
+
+$$
+L = \big[ (\alpha_0, CT_{\alpha_0}),
+(\alpha_1, CT_{\alpha_1}),
+\ldots,
+(\alpha_{k-1}, CT_{\alpha_{k-1}}) \big]
+$$
+
+el vector `asignacionesConCosto`. Por definición de `minBy(_._2)`, el par seleccionado $(\alpha^\*, CT_{\alpha^\*})$ satisface:
+
+- Existe $j$ tal que $(\alpha^\*, CT_{\alpha^\*}) = (\alpha_j, CT_{\alpha_j})$.
+- Para todo $i$ con $0 \le i < k$:
+
+$$
+CT_{\alpha^\*} \le CT_{\alpha_i}.
+$$
+
+Dado que cada $\alpha_i$ recorre exactamente $\mathcal{A}(n,m)$, la condición anterior se reescribe como:
+
+$$
+\forall \beta \in \mathcal{A}(n,m):\ CT_{\alpha^\*} \le CT_\beta,
+$$
+
+que es precisamente la definición de asignación óptima requerida en el problema.
+
+### Conclusión
+
+- `generarAsignaciones` explora exhaustivamente el espacio $\mathcal{A}(n,m)$ de asignaciones completas.
+- `costoAsignacion` calcula correctamente $CT_\alpha$ para cada asignación $\alpha$.
+- `asignacionOptima` aplica `costoAsignacion` a todas las asignaciones completas y selecciona con `minBy(_._2)` aquella con costo mínimo.
+
+Por lo tanto, se cumple:
+
+$$
+P_{\mathrm{opt}}(C,A,DA,w)
+=
+f_{\mathrm{opt}}(C,A,DA,w),
+$$
+
+y la función `asignacionOptima` es formalmente correcta de acuerdo con la especificación del punto 2.9.

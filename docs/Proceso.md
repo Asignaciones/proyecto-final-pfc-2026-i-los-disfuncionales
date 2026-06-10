@@ -822,3 +822,396 @@ La primera cuantifica la capacidad desaprovechada, la segunda mide la distancia 
 En conjunto, estas funciones constituyen la base para comparar distintas asignaciones y seleccionar posteriormente aquella que minimice el costo total.
 
 ---
+
+## Punto 2.8 - Generando asignaciones
+
+### Definición del algoritmo
+
+```scala
+def generarAsignaciones(n: Int, m: Int): Vector[Asignacion] = {
+  if (n == 0) {
+    Vector(Vector.empty[Int])
+  } else {
+    generarAsignaciones(n - 1, m).flatMap { asignacionParcial =>
+      Vector.tabulate(m)(k => asignacionParcial :+ k)
+    }
+  }
+}
+```
+
+La función `generarAsignaciones` construye de forma recursiva todas las asignaciones completas posibles para $n$ cursos y $m$ aulas.  
+Cada asignación es un vector de longitud $n$ donde cada componente toma un valor en $\{0,\ldots,m-1\}$, es decir, representa el índice del aula asignada a cada curso.
+
+---
+
+### Explicación paso a paso
+
+#### Caso base
+
+```scala
+if (n == 0) {
+  Vector(Vector.empty[Int])
+}
+```
+
+Cuando $n = 0$, no hay cursos por asignar.  
+En este caso, la función devuelve un único vector vacío `Vector.empty[Int]`, que representa la única “asignación” posible de longitud cero.
+
+En términos del proceso:
+
+- No se generan más llamadas recursivas.
+- El resultado es un vector que contiene exactamente una asignación, de tamaño 0.
+
+---
+
+#### Caso recursivo
+
+```scala
+val prev: Vector[Asignacion] = generarAsignaciones(n - 1, m)
+
+prev.flatMap { asignacionParcial =>
+  Vector.tabulate(m)(k => asignacionParcial :+ k)
+}
+```
+
+En el caso $n > 0$:
+
+1. Se realiza una llamada recursiva para obtener todas las asignaciones de tamaño $n-1$:
+
+   ```scala
+   val prev = generarAsignaciones(n - 1, m)
+   ```
+
+   Este `prev` contiene todas las combinaciones posibles para los primeros $n-1$ cursos.
+
+2. Para cada asignación parcial `asignacionParcial` en `prev` se generan $m$ nuevas asignaciones, añadiendo al final cada aula posible:
+
+   ```scala
+   Vector.tabulate(m)(k => asignacionParcial :+ k)
+   ```
+
+  - `Vector.tabulate(m)` genera los valores $k = 0,1,\ldots,m-1$.
+  - La operación `asignacionParcial :+ k` crea una nueva asignación extendiendo el vector anterior con un aula nueva para el curso número $n-1$.
+
+3. El `flatMap` aplana todas esas listas intermedias en un solo `Vector[Asignacion]`, que contiene todas las asignaciones de longitud $n$.
+
+---
+
+### Ejemplo de ejecución
+
+Supongamos $n = 2$ y $m = 2$.
+
+#### Paso 1: Llamada inicial
+
+```scala
+generarAsignaciones(2, 2)
+```
+
+Esto evalúa:
+
+```scala
+prev = generarAsignaciones(1, 2)
+```
+
+#### Paso 2: Subproblema $n = 1$
+
+Para $n = 1$:
+
+```scala
+prev1 = generarAsignaciones(0, 2)
+```
+
+Y para $n = 0$:
+
+```scala
+generarAsignaciones(0, 2) // => Vector(Vector())
+```
+
+Es decir:
+
+```scala
+prev1 = Vector(Vector())
+```
+
+Luego:
+
+```scala
+prev1.flatMap { asig =>
+  Vector.tabulate(2)(k => asig :+ k)
+}
+```
+
+produce:
+
+```scala
+Vector(
+  Vector(0),
+  Vector(1)
+)
+```
+
+#### Paso 3: Volviendo a $n = 2$
+
+Ahora `prev` (para $n = 2$) es:
+
+```scala
+Vector(
+  Vector(0),
+  Vector(1)
+)
+```
+
+Y se calcula:
+
+```scala
+prev.flatMap { asig =>
+  Vector.tabulate(2)(k => asig :+ k)
+}
+```
+
+Es decir:
+
+- Para `asig = Vector(0)` se generan:
+
+  ```scala
+  Vector(0, 0), Vector(0, 1)
+  ```
+
+- Para `asig = Vector(1)` se generan:
+
+  ```scala
+  Vector(1, 0), Vector(1, 1)
+  ```
+
+Resultado final:
+
+```scala
+Vector(
+  Vector(0, 0),
+  Vector(0, 1),
+  Vector(1, 0),
+  Vector(1, 1)
+)
+```
+
+que son exactamente todas las asignaciones posibles en $\{0,1\}^2$.
+
+---
+
+### Llamados de pila en `generarAsignaciones`
+
+Para $n = 3$ y $m = 2$:
+
+```scala
+generarAsignaciones(3, 2)
+```
+
+La secuencia de llamadas recursivas es:
+
+```scala
+generarAsignaciones(3, 2)
+  -> generarAsignaciones(2, 2)
+     -> generarAsignaciones(1, 2)
+        -> generarAsignaciones(0, 2)
+```
+
+Luego la pila se va “desenrollando”:
+
+- `generarAsignaciones(0, 2)` devuelve `Vector(Vector())`.
+- Con ese resultado se construyen todas las asignaciones de tamaño 1.
+- A partir de esas, se construyen las de tamaño 2.
+- Finalmente, se construyen las de tamaño 3.
+
+---
+
+### Diagrama de llamados de pila
+
+```mermaid
+sequenceDiagram
+    participant G3 as generarAsignaciones(3, 2)
+    participant G2 as generarAsignaciones(2, 2)
+    participant G1 as generarAsignaciones(1, 2)
+    participant G0 as generarAsignaciones(0, 2)
+
+    G3->>G2: llamada recursiva (n=2)
+    G2->>G1: llamada recursiva (n=1)
+    G1->>G0: llamada recursiva (n=0)
+
+    G0-->>G1: retorna Vector(Vector())
+    G1-->>G2: retorna asignaciones de tamaño 1
+    G2-->>G3: retorna asignaciones de tamaño 2
+    G3-->>Main: retorna asignaciones de tamaño 3
+```
+
+En cada retorno, se construye el nivel siguiente de asignaciones usando `flatMap` y `Vector.tabulate`, sin modificar estructuras previas (todas las colecciones son inmutables).
+
+---
+
+### Diferencia con una implementación iterativa
+
+- En una versión puramente iterativa, se podrían generar las asignaciones con ciclos anidados e índices mutables.
+- En esta versión funcional, el espacio de búsqueda se construye combinando recursión y funciones de alto orden, sin usar `var`, `for` ni `while`.
+- La recursión solo depende de $n$, y la combinación `flatMap` + `Vector.tabulate` reemplaza los bucles internos de manera declarativa.
+
+---
+
+## Punto 2.9 - Calculando una asignación óptima
+
+### Definición del algoritmo
+
+```scala
+def asignacionOptima(cursos: Cursos, aulas: Aulas, d: Distancias,
+                     w: Pesos): (Asignacion, Int) = {
+  val n = cursos.length
+  val m = aulas.length
+
+  val asignaciones: Vector[Asignacion] = generarAsignaciones(n, m)
+
+  val asignacionesConCosto: Vector[(Asignacion, Int)] =
+    asignaciones.map { a =>
+      val c = costoAsignacion(cursos, aulas, d, a, w)
+      (a, c)
+    }
+
+  asignacionesConCosto.minBy(_._2)
+}
+```
+
+La función `asignacionOptima` explora todo el espacio de asignaciones completas y selecciona aquella que minimiza el costo total definido por `costoAsignacion`.
+
+---
+
+### Explicación paso a paso
+
+#### Paso 1: Generación de todas las asignaciones
+
+```scala
+val n = cursos.length
+val m = aulas.length
+val asignaciones: Vector[Asignacion] = generarAsignaciones(n, m)
+```
+
+- Se obtiene el número de cursos $n$ y el número de aulas $m$.
+- Se llama a `generarAsignaciones(n, m)` para producir todas las asignaciones completas posibles.
+- Cada elemento de `asignaciones` es un vector $\alpha \in \{0,\ldots,m-1\}^n$, es decir, todas las posibles combinaciones de cursos en aulas.
+
+---
+
+#### Paso 2: Cálculo del costo de cada asignación
+
+```scala
+val asignacionesConCosto: Vector[(Asignacion, Int)] =
+  asignaciones.map { a =>
+    val c = costoAsignacion(cursos, aulas, d, a, w)
+    (a, c)
+  }
+```
+
+Para cada asignación `a` en el vector:
+
+1. Se calcula el costo de `a` llamando a:
+
+   ```scala
+   costoAsignacion(cursos, aulas, d, a, w)
+   ```
+
+   que implementa la función de costo total $CT_\alpha$ definida en el enunciado:
+
+   $$
+   CT_\alpha = w_{CH} \cdot CH_\alpha + w_{CF} \cdot CF_\alpha +
+   w_{DE} \cdot DE_\alpha + w_{MV} \cdot MV_\alpha.
+   $$
+
+2. Se construye una tupla `(a, c)` que relaciona la asignación con su costo.
+3. `map` devuelve un `Vector[(Asignacion, Int)]` que contiene todas las parejas $(\alpha, CT_\alpha)$.
+
+---
+
+#### Paso 3: Selección del mínimo
+
+```scala
+asignacionesConCosto.minBy(_._2)
+```
+
+La función `minBy(_._2)` recorre todas las tuplas `(a, c)` y devuelve aquella cuyo segundo componente (el costo `c`) es mínimo.
+
+- Si denotamos por:
+
+  ```scala
+  (asigOpt, costoOpt) = asignacionesConCosto.minBy(_._2)
+  ```
+
+  entonces `asigOpt` es una asignación completa y `costoOpt` es el valor mínimo de `costoAsignacion` entre todas las asignaciones generadas.
+
+- En términos del problema, estamos calculando:
+
+  $$
+  (\alpha^*, CT_{\alpha^*}) =
+  \operatorname*{arg\,min}_{\alpha \in \mathcal{A}(n,m)}
+  CT_\alpha.
+  $$
+
+---
+
+### Ejemplo de ejecución (Ejemplo 1 del enunciado)
+
+Para el ejemplo 1 del PDF, con:
+
+- 3 cursos $C_1$.
+- 2 aulas $A_1$.
+- Matriz de distancias $DA_1$.
+- Pesos $w = (1000, 100, 1, 2)$.
+
+El espacio de asignaciones completas $\mathcal{A}(3,2)$ contiene $2^3 = 8$ vectores.  
+`asignacionOptima` evalúa todas ellas y escoge la de menor costo:
+
+```scala
+val (asigOpt, costoOpt) =
+  asignacionOptima(cursos1, aulas1, d1, w)
+```
+
+En la ejecución de prueba, por ejemplo, se obtiene:
+
+```scala
+asigOpt  = Vector(1, 0, 0)
+costoOpt = 31
+```
+
+y se verifica que no hay ninguna otra asignación con costo menor.
+
+---
+
+### Llamados de pila y flujo de datos
+
+A diferencia de `generarAsignaciones`, la función `asignacionOptima` no es recursiva: la recursión ocurre dentro de `generarAsignaciones`. El flujo de datos puede describirse así:
+
+```mermaid
+flowchart TD
+    A["Entrada"]
+    B["Calcular n y m"]
+    C["Generar asignaciones"]
+    D["Asignaciones completas"]
+    E["Calcular costo de cada asignacion"]
+    F["Elegir costo minimo"]
+    G["Retornar asignacion optima"]
+
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+    F --> G
+```
+
+- Toda la lógica de búsqueda se expresa mediante combinadores sobre colecciones (`map`, `minBy`), sin variables mutables ni ciclos explícitos.
+- La corrección de `asignacionOptima` se apoya en:
+  - `generarAsignaciones`, que garantiza que se exploran todas las asignaciones completas.
+  - `costoAsignacion`, que implementa exactamente la función de costo del problema.
+
+---
+
+### Diferencia con una búsqueda parcial o heurística
+
+- Una solución heurística podría explorar sólo una parte del espacio (por ejemplo, asignando cursos “greedy” a aulas), lo que no garantiza optimalidad.
+- En cambio, `asignacionOptima` explora sistemáticamente todo el espacio $\mathcal{A}(n,m)$, por lo que el par `(asignación, costo)` devuelto es óptimo global dentro de ese espacio.
+- Este enfoque es costoso (de orden $m^n$), pero es exactamente lo que pide el proyecto en la versión secuencial, antes de considerar técnicas de paralelización.
